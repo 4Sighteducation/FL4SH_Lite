@@ -1,16 +1,9 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { LINKS, callFn, getIdentity } from './lib/api'
 
-const APP_STORE_URL = 'https://apps.apple.com/in/app/fl4sh-study-smarter/id6747457678'
-const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.foursighteducation.flash&pcampaignid=web_share'
-const WEBSITE_URL = 'https://www.fl4shcards.com'
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || ''
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
-const BRIDGE_SECRET = import.meta.env.VITE_FL4SH_LITE_BRIDGE_SECRET || ''
-const ENABLE_LOCAL_MOCK = String(import.meta.env.VITE_ENABLE_LOCAL_MOCK || 'false') === 'true'
-
-const appState = reactive({
+const view = ref('home') // home | subject | study
+const state = reactive({
   loading: true,
   busy: false,
   error: '',
@@ -21,162 +14,151 @@ const appState = reactive({
   selectedSubjectKey: '',
   cards: [],
   showUpsell: false,
-  upsellTitle: 'Get the full FL4SH experience',
-  upsellMessage: 'Download FL4SH for the complete mobile-native experience.',
-})
-
-const manualForm = reactive({
-  front_text: '',
-  back_text: '',
-  card_type: 'short_answer',
-})
-
-const aiForm = reactive({
-  topic: '',
-  questionType: 'short_answer',
-  numCards: 3,
+  upsellTitle: '',
+  upsellMessage: '',
+  studyIndex: 0,
+  revealAnswer: false,
+  sessionDone: false,
 })
 
 const subjectDraft = ref([])
+const aiTopic = ref('')
+const aiCount = ref(3)
+const aiType = ref('short_answer')
+const manualTopic = ref('')
+const manualFront = ref('')
+const manualBack = ref('')
+const activeTopicFilter = ref('')
 
 const selectedSubject = computed(() =>
-  appState.selectedSubjects.find((s) => s.subject_key === appState.selectedSubjectKey) || null
+  state.selectedSubjects.find((s) => s.subject_key === state.selectedSubjectKey) || null
 )
 
-const canCreateMore = computed(() => Number(selectedSubject.value?.cards_remaining || 0) > 0)
+const progressionKey = computed(() => {
+  const u = state.user?.email || getIdentity()?.email || 'anonymous'
+  return `fl4sh-lite-progress:${u}:${state.selectedSubjectKey || 'none'}`
+})
+const progressionMap = ref({})
+const dueCards = computed(() => {
+  const now = Date.now()
+  return state.cards.filter((c) => {
+    const p = progressionMap.value[c.id]
+    if (!p || !p.nextReviewAt) return true
+    return new Date(p.nextReviewAt).getTime() <= now
+  })
+})
+const activeStudyCard = computed(() => dueCards.value[state.studyIndex] || null)
+const topicList = computed(() => {
+  const set = new Set()
+  state.cards.forEach((c) => {
+    const t = String(c.topic_code || '').trim()
+    if (t) set.add(t)
+  })
+  return [...set]
+})
+const filteredCards = computed(() => {
+  if (!activeTopicFilter.value) return state.cards
+  return state.cards.filter((c) => String(c.topic_code || '') === activeTopicFilter.value)
+})
 
-function clearError() {
-  appState.error = ''
-}
-
-function openUpsell(title, message) {
-  appState.upsellTitle = title
-  appState.upsellMessage = message
-  appState.showUpsell = true
+function neonUpsell(title, message) {
+  state.upsellTitle = title
+  state.upsellMessage = message
+  state.showUpsell = true
 }
 
 function closeUpsell() {
-  appState.showUpsell = false
+  state.showUpsell = false
 }
 
-function getFnUrl(name) {
-  if (!SUPABASE_URL) throw new Error('Missing VITE_SUPABASE_URL')
-  return `${SUPABASE_URL.replace(/\/$/, '')}/functions/v1/${name}`
+function clearError() {
+  state.error = ''
 }
 
-function getKnackIdentity() {
+function loadProgression() {
   try {
-    const k = window.Knack
-    if (!k) return null
-    const attrs = typeof k.getUserAttributes === 'function' ? (k.getUserAttributes() || {}) : {}
-    const email = String(attrs.email || attrs?.attributes?.email || '').trim().toLowerCase()
-    if (!email) return null
-    return {
-      email,
-      name: String(attrs.name || attrs?.attributes?.name || '').trim() || null,
-      school_name: String(attrs.school || attrs?.attributes?.school || '').trim() || null,
-      qualification_level: String(
-        attrs.qualification_level ||
-          attrs.qualificationLevel ||
-          attrs.level ||
-          attrs.exam_level ||
-          attrs.year_group ||
-          attrs?.attributes?.qualification_level ||
-          ''
-      ).trim() || null,
-      knack_user_id: String(attrs.id || attrs.record_id || '').trim() || null,
-    }
+    progressionMap.value = JSON.parse(localStorage.getItem(progressionKey.value) || '{}')
   } catch {
-    return null
+    progressionMap.value = {}
   }
 }
 
-function getLocalMockIdentity() {
-  if (!ENABLE_LOCAL_MOCK) return null
-  return {
-    email: String(import.meta.env.VITE_LOCAL_MOCK_EMAIL || 'student@example.com').trim().toLowerCase(),
-    name: String(import.meta.env.VITE_LOCAL_MOCK_NAME || 'Test Student').trim(),
-    school_name: String(import.meta.env.VITE_LOCAL_MOCK_SCHOOL || 'Test School').trim(),
-    qualification_level: String(import.meta.env.VITE_LOCAL_MOCK_QUALIFICATION || 'A_LEVEL').trim(),
-    knack_user_id: 'local-mock-user',
-  }
+function saveProgression() {
+  localStorage.setItem(progressionKey.value, JSON.stringify(progressionMap.value))
 }
 
-function getIdentity() {
-  return getKnackIdentity() || getLocalMockIdentity()
+function scheduleDaysForBox(box) {
+  if (box <= 1) return 1
+  if (box === 2) return 2
+  if (box === 3) return 4
+  if (box === 4) return 7
+  return 21
 }
 
-async function callFn(name, body = {}) {
-  const identity = getIdentity()
-  if (!identity?.email) {
-    throw new Error('No Knack user identity found. Open this inside Knack (or enable local mock).')
+function applyStudyGrade(correct) {
+  const card = activeStudyCard.value
+  if (!card) return
+  const prev = progressionMap.value[card.id] || { box: 1 }
+  const nextBox = correct ? Math.min(5, Number(prev.box || 1) + 1) : 1
+  const nextDays = scheduleDaysForBox(nextBox)
+  const nextReviewAt = new Date(Date.now() + nextDays * 24 * 60 * 60 * 1000).toISOString()
+  progressionMap.value[card.id] = {
+    box: nextBox,
+    lastReviewedAt: new Date().toISOString(),
+    nextReviewAt,
   }
-  const headers = {
-    'Content-Type': 'application/json',
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  }
-  if (BRIDGE_SECRET) headers['x-fl4sh-lite-secret'] = BRIDGE_SECRET
-
-  const res = await fetch(getFnUrl(name), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ ...identity, ...body }),
-  })
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok || data?.ok === false) {
-    throw new Error(data?.error || `Request failed (${res.status})`)
-  }
-  return data
+  saveProgression()
+  state.revealAnswer = false
+  state.studyIndex += 1
+  if (state.studyIndex >= dueCards.value.length) state.sessionDone = true
 }
 
 async function loadContext() {
   clearError()
-  appState.loading = true
+  state.loading = true
   try {
     const data = await callFn('fl4sh-lite-context')
-    appState.user = data.user || null
-    appState.limits = data.limits || appState.limits
-    appState.availableSubjects = Array.isArray(data.available_subjects) ? data.available_subjects : []
-    appState.selectedSubjects = Array.isArray(data.selected_subjects) ? data.selected_subjects : []
-    subjectDraft.value = appState.selectedSubjects.map((s) => s.subject_key)
-    if (!appState.selectedSubjectKey && appState.selectedSubjects[0]) {
-      appState.selectedSubjectKey = appState.selectedSubjects[0].subject_key
-    }
+    state.user = data.user || null
+    state.limits = data.limits || state.limits
+    state.availableSubjects = Array.isArray(data.available_subjects) ? data.available_subjects : []
+    state.selectedSubjects = Array.isArray(data.selected_subjects) ? data.selected_subjects : []
+    subjectDraft.value = state.selectedSubjects.map((s) => s.subject_key)
+    if (!state.selectedSubjectKey && state.selectedSubjects[0]) state.selectedSubjectKey = state.selectedSubjects[0].subject_key
     await loadCards()
   } catch (e) {
-    appState.error = e.message || 'Failed to load FL4SH Lite.'
+    state.error = e.message || 'Failed to load FL4SH Lite.'
   } finally {
-    appState.loading = false
+    state.loading = false
   }
 }
 
 async function loadCards() {
-  if (!appState.selectedSubjectKey) {
-    appState.cards = []
+  if (!state.selectedSubjectKey) {
+    state.cards = []
     return
   }
   try {
-    const data = await callFn('fl4sh-lite-list-cards', { subject_key: appState.selectedSubjectKey })
-    appState.cards = Array.isArray(data.cards) ? data.cards : []
+    const data = await callFn('fl4sh-lite-list-cards', { subject_key: state.selectedSubjectKey })
+    state.cards = Array.isArray(data.cards) ? data.cards : []
     if (Array.isArray(data.stats) && data.stats[0]) {
-      appState.selectedSubjects = appState.selectedSubjects.map((s) =>
-        s.subject_key === appState.selectedSubjectKey ? { ...s, ...data.stats[0] } : s
+      state.selectedSubjects = state.selectedSubjects.map((s) =>
+        s.subject_key === state.selectedSubjectKey ? { ...s, ...data.stats[0] } : s
       )
     }
+    loadProgression()
   } catch (e) {
-    appState.error = e.message || 'Failed to load cards.'
+    state.error = e.message || 'Failed to load cards.'
   }
 }
 
-async function saveSubjectSelection() {
+async function saveSubjects() {
   clearError()
-  appState.busy = true
+  state.busy = true
   try {
-    if (subjectDraft.value.length > appState.limits.max_subjects) {
-      throw new Error(`You can only choose up to ${appState.limits.max_subjects} subjects in FL4SH Lite.`)
+    if (subjectDraft.value.length > state.limits.max_subjects) {
+      throw new Error(`Select up to ${state.limits.max_subjects} subjects only.`)
     }
-    const subjects = appState.availableSubjects
+    const subjects = state.availableSubjects
       .filter((s) => subjectDraft.value.includes(s.subject_key))
       .map((s) => ({
         subject_key: s.subject_key,
@@ -185,224 +167,264 @@ async function saveSubjectSelection() {
         qualification_type: s.qualification_type,
       }))
     const data = await callFn('fl4sh-lite-select-subjects', { subjects })
-    appState.selectedSubjects = Array.isArray(data.selected_subjects) ? data.selected_subjects : []
-    if (!appState.selectedSubjects.some((s) => s.subject_key === appState.selectedSubjectKey)) {
-      appState.selectedSubjectKey = appState.selectedSubjects[0]?.subject_key || ''
+    state.selectedSubjects = Array.isArray(data.selected_subjects) ? data.selected_subjects : []
+    if (!state.selectedSubjects.some((s) => s.subject_key === state.selectedSubjectKey)) {
+      state.selectedSubjectKey = state.selectedSubjects[0]?.subject_key || ''
     }
     await loadCards()
-    if (appState.selectedSubjects.length >= appState.limits.max_subjects) {
-      openUpsell(
-        'Subject limit reached in Lite',
-        'You have reached your Lite subject limit. Get the full FL4SH app for unlimited subjects and full study tools.'
-      )
-    }
   } catch (e) {
-    appState.error = e.message || 'Could not save subject selection.'
+    state.error = e.message || 'Could not save subjects.'
   } finally {
-    appState.busy = false
+    state.busy = false
   }
 }
 
-async function createManualCard() {
+function openSubject(subjectKey) {
+  state.selectedSubjectKey = subjectKey
+  view.value = 'subject'
+  loadCards()
+}
+
+async function addManualCard() {
   clearError()
-  if (!appState.selectedSubjectKey) return
-  if (!canCreateMore.value) {
-    openUpsell(
-      'Card limit reached in this subject',
-      'You have reached 10 cards for this subject in Lite. Download FL4SH for unlimited cards and advanced revision.'
-    )
-    return
-  }
-  appState.busy = true
+  if (!state.selectedSubjectKey) return
+  state.busy = true
   try {
-    const data = await callFn('fl4sh-lite-create-card', {
-      subject_key: appState.selectedSubjectKey,
-      front_text: manualForm.front_text,
-      back_text: manualForm.back_text,
-      card_type: manualForm.card_type,
+    await callFn('fl4sh-lite-create-card', {
+      subject_key: state.selectedSubjectKey,
+      topic_code: manualTopic.value || null,
+      front_text: manualFront.value,
+      back_text: manualBack.value,
+      card_type: 'short_answer',
     })
-    manualForm.front_text = ''
-    manualForm.back_text = ''
-    if (data?.stats) {
-      appState.selectedSubjects = appState.selectedSubjects.map((s) =>
-        s.subject_key === appState.selectedSubjectKey ? { ...s, ...data.stats } : s
-      )
-    }
+    manualTopic.value = ''
+    manualFront.value = ''
+    manualBack.value = ''
     await loadCards()
   } catch (e) {
-    appState.error = e.message || 'Could not create card.'
+    state.error = e.message || 'Could not create card.'
   } finally {
-    appState.busy = false
+    state.busy = false
   }
 }
 
-async function generateAICards() {
+async function generateCards() {
   clearError()
-  if (!appState.selectedSubjectKey || !selectedSubject.value) return
-  if (!canCreateMore.value) {
-    openUpsell(
-      'Card limit reached in this subject',
-      'You have reached 10 cards for this subject in Lite. Download FL4SH for unlimited AI generation and full study features.'
-    )
-    return
-  }
-  appState.busy = true
+  if (!selectedSubject.value) return
+  state.busy = true
   try {
-    const count = Math.min(Number(aiForm.numCards || 1), Number(selectedSubject.value.cards_remaining || 1))
     await callFn('fl4sh-lite-generate-cards', {
-      subject_key: appState.selectedSubjectKey,
+      subject_key: state.selectedSubjectKey,
       subject: selectedSubject.value.subject_name,
-      topic: aiForm.topic,
+      topic: aiTopic.value,
       examBoard: selectedSubject.value.exam_board,
       examType: selectedSubject.value.qualification_type,
-      questionType: aiForm.questionType,
-      numCards: count,
+      questionType: aiType.value,
+      numCards: Math.max(1, Math.min(5, Number(aiCount.value || 3))),
     })
-    await loadContext()
-    if (Number(selectedSubject.value?.cards_remaining || 0) <= 0) {
-      openUpsell(
-        'Lite AI limit reached',
-        'You are at the Lite card limit for this subject. Get full FL4SH for unlimited AI card generation.'
-      )
+    await loadCards()
+    if ((selectedSubject.value?.cards_remaining || 0) <= 0) {
+      neonUpsell('Lite card limit reached', 'Get the full FL4SH app for unlimited cards and full study tools.')
     }
   } catch (e) {
-    appState.error = e.message || 'Could not generate AI cards.'
+    state.error = e.message || 'Could not generate cards.'
   } finally {
-    appState.busy = false
+    state.busy = false
   }
 }
 
 async function deleteCard(cardId) {
-  clearError()
-  appState.busy = true
+  state.busy = true
   try {
     await callFn('fl4sh-lite-delete-card', { card_id: cardId })
     await loadCards()
   } catch (e) {
-    appState.error = e.message || 'Could not delete card.'
+    state.error = e.message || 'Could not delete card.'
   } finally {
-    appState.busy = false
+    state.busy = false
   }
 }
 
-onMounted(() => {
-  loadContext()
-})
+function startStudy() {
+  state.studyIndex = 0
+  state.sessionDone = false
+  state.revealAnswer = false
+  view.value = 'study'
+}
+
+watch(
+  () => state.selectedSubjectKey,
+  () => {
+    loadProgression()
+  }
+)
+
+onMounted(loadContext)
 </script>
 
 <template>
   <div class="page">
-    <header class="topbar">
-      <div class="brand">
-        <div class="logo">FL4SH Lite</div>
-        <div class="meta">{{ appState.user?.name || 'Student' }} · {{ appState.user?.school_name || '' }}</div>
+    <header class="topbar neon">
+      <div class="brand-wrap">
+        <div class="logo-mark">⚡</div>
+        <div>
+          <div class="logo">FL4SH Lite</div>
+          <div class="meta">{{ state.user?.name || 'Student' }} · {{ state.user?.school_name || '' }}</div>
+        </div>
       </div>
-      <div class="cta-row">
-        <a :href="APP_STORE_URL" target="_blank" rel="noopener">Download iOS App</a>
-        <a :href="PLAY_STORE_URL" target="_blank" rel="noopener">Get Android App</a>
-        <a :href="WEBSITE_URL" target="_blank" rel="noopener">fl4shcards.com</a>
+      <div class="badge-row">
+        <a :href="LINKS.appStore" target="_blank" rel="noopener" class="store-badge">
+          <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" />
+        </a>
+        <a :href="LINKS.playStore" target="_blank" rel="noopener" class="store-badge">
+          <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" />
+        </a>
       </div>
     </header>
 
-    <section class="notice">
-      <strong>FL4SH Lite</strong> gives you a limited preview. Full FL4SH unlocks unlimited cards, mobile-native study, and advanced features.
+    <section class="notice neon">
+      <strong>FL4SH Lite</strong> is limited to {{ state.limits.max_subjects }} subjects and {{ state.limits.max_cards_per_subject }} cards per subject.
+      For full mobile-native experience, visit <a :href="LINKS.website" target="_blank" rel="noopener">fl4shcards.com</a>.
     </section>
 
-    <main class="layout" v-if="!appState.loading">
+    <div v-if="state.error" class="error">{{ state.error }}</div>
+    <div v-if="state.loading" class="loading">Loading FL4SH Lite...</div>
+
+    <main class="layout" v-if="!state.loading">
       <aside class="panel">
-        <h2>Choose up to {{ appState.limits.max_subjects }} subjects</h2>
-        <div class="subjects">
-          <label v-for="subject in appState.availableSubjects" :key="subject.subject_key" class="subject-item">
+        <h3>Your subjects</h3>
+        <div class="subject-pick">
+          <label v-for="subject in state.availableSubjects" :key="subject.subject_key" class="subject-item">
             <input
               type="checkbox"
               :value="subject.subject_key"
               v-model="subjectDraft"
-              :disabled="!subjectDraft.includes(subject.subject_key) && subjectDraft.length >= appState.limits.max_subjects"
+              :disabled="!subjectDraft.includes(subject.subject_key) && subjectDraft.length >= state.limits.max_subjects"
             />
-            <span>{{ subject.subject_name }}</span>
-            <small>{{ subject.exam_board }} · {{ subject.qualification_type }}</small>
+            <div>
+              <div>{{ subject.subject_name }}</div>
+              <small>{{ subject.exam_board }} · {{ subject.qualification_type }}</small>
+            </div>
           </label>
         </div>
-        <button class="btn" @click="saveSubjectSelection" :disabled="appState.busy">Save subjects</button>
+        <button class="btn neon-btn" :disabled="state.busy" @click="saveSubjects">Save subjects</button>
 
-        <h3>My selected subjects</h3>
-        <div v-if="appState.selectedSubjects.length === 0" class="muted">No subjects selected yet.</div>
-        <button
-          v-for="s in appState.selectedSubjects"
-          :key="s.subject_key"
-          class="subject-chip"
-          :class="{ active: appState.selectedSubjectKey === s.subject_key }"
-          @click="appState.selectedSubjectKey = s.subject_key; loadCards()"
-        >
-          <span>{{ s.subject_name }}</span>
-          <small>{{ s.card_count || 0 }}/{{ appState.limits.max_cards_per_subject }}</small>
-        </button>
+        <div class="subject-cards">
+          <button
+            v-for="s in state.selectedSubjects"
+            :key="s.subject_key"
+            class="subject-card"
+            :class="{ active: state.selectedSubjectKey === s.subject_key }"
+            @click="openSubject(s.subject_key)"
+          >
+            <span>{{ s.subject_name }}</span>
+            <small>{{ s.card_count || 0 }}/{{ state.limits.max_cards_per_subject }} cards</small>
+          </button>
+        </div>
       </aside>
 
-      <section class="panel main-panel">
-        <div class="panel-head">
-          <h2>Flashcards</h2>
-          <div class="muted" v-if="selectedSubject">
-            {{ selectedSubject.subject_name }} · {{ selectedSubject.cards_remaining || 0 }} remaining in Lite
-          </div>
-        </div>
-
-        <div class="forms">
-          <div class="form-card">
-            <h3>Create manually</h3>
-            <textarea v-model="manualForm.front_text" placeholder="Question / front of card"></textarea>
-            <textarea v-model="manualForm.back_text" placeholder="Answer / back of card"></textarea>
-            <button class="btn" @click="createManualCard" :disabled="appState.busy || !appState.selectedSubjectKey">
-              Add card
-            </button>
-          </div>
-
-          <div class="form-card">
-            <h3>Generate with AI</h3>
-            <input v-model="aiForm.topic" placeholder="Topic to generate from (e.g. Photosynthesis)" />
-            <div class="row">
-              <select v-model="aiForm.questionType">
-                <option value="short_answer">Short answer</option>
-                <option value="multiple_choice">Multiple choice</option>
-                <option value="essay">Essay</option>
-                <option value="acronym">Acronym</option>
-              </select>
-              <input type="number" min="1" max="5" v-model="aiForm.numCards" />
+      <section class="panel main-panel" v-if="view === 'home' || view === 'subject'">
+        <template v-if="view === 'home'">
+          <h2>Choose a subject card to enter Flashcards</h2>
+          <p class="muted">Subject cards are the entry point. Open one to manage saved cards, then move to Study Mode.</p>
+        </template>
+        <template v-else>
+          <div class="panel-head">
+            <h2>{{ selectedSubject?.subject_name || 'Subject' }}</h2>
+            <div class="toolbar">
+              <button class="btn" @click="startStudy" :disabled="state.cards.length === 0">Study Mode</button>
+              <button class="btn ghost" @click="view = 'home'">Back</button>
             </div>
-            <button class="btn hot" @click="generateAICards" :disabled="appState.busy || !appState.selectedSubjectKey">
-              Generate cards
-            </button>
           </div>
+          <div class="muted">Saved cards for this subject: {{ state.cards.length }}</div>
+          <div class="topic-strip" v-if="topicList.length">
+            <button class="topic-pill" :class="{ active: !activeTopicFilter }" @click="activeTopicFilter = ''">All topics</button>
+            <button
+              v-for="t in topicList"
+              :key="t"
+              class="topic-pill"
+              :class="{ active: activeTopicFilter === t }"
+              @click="activeTopicFilter = t; aiTopic = t"
+            >{{ t }}</button>
+          </div>
+
+          <div class="forms">
+            <div class="form-card">
+              <h3>Create card manually</h3>
+              <input v-model="manualTopic" placeholder="Topic (optional but recommended)" />
+              <textarea v-model="manualFront" placeholder="Question / front of card"></textarea>
+              <textarea v-model="manualBack" placeholder="Answer / back of card"></textarea>
+              <button class="btn neon-btn" :disabled="state.busy" @click="addManualCard">Add card</button>
+            </div>
+            <div class="form-card">
+              <h3>Generate with AI</h3>
+              <input v-model="aiTopic" placeholder="Topic (required for good results)" />
+              <div class="row">
+                <select v-model="aiType">
+                  <option value="short_answer">Short answer</option>
+                  <option value="multiple_choice">Multiple choice</option>
+                  <option value="essay">Essay</option>
+                  <option value="acronym">Acronym</option>
+                </select>
+                <input type="number" min="1" max="5" v-model="aiCount" />
+              </div>
+              <button class="btn hot" :disabled="state.busy || !aiTopic" @click="generateCards">Generate cards</button>
+              <small class="muted">Lite excludes voice feedback on short/essay questions.</small>
+            </div>
+          </div>
+
+          <div class="cards">
+            <article class="card" v-for="c in filteredCards" :key="c.id">
+              <h4>{{ c.front_text }}</h4>
+              <small class="muted" v-if="c.topic_code">Topic: {{ c.topic_code }}</small>
+              <p>{{ c.back_text }}</p>
+              <div class="card-actions">
+                <span>Box {{ progressionMap[c.id]?.box || 1 }}</span>
+                <button @click="deleteCard(c.id)" :disabled="state.busy">Delete</button>
+              </div>
+            </article>
+            <div v-if="filteredCards.length === 0" class="muted">No saved cards for this filter yet.</div>
+          </div>
+        </template>
+      </section>
+
+      <section class="panel main-panel" v-else>
+        <div class="panel-head">
+          <h2>Study Mode · {{ selectedSubject?.subject_name }}</h2>
+          <button class="btn ghost" @click="view = 'subject'">Back to cards</button>
         </div>
-
-        <div class="error" v-if="appState.error">{{ appState.error }}</div>
-
-        <div class="cards">
-          <article v-for="card in appState.cards" :key="card.id" class="card">
-            <h4>{{ card.front_text }}</h4>
-            <p>{{ card.back_text }}</p>
-            <div class="card-actions">
-              <span>{{ card.card_type }}</span>
-              <button @click="deleteCard(card.id)" :disabled="appState.busy">Delete</button>
+        <p class="muted" v-if="!state.sessionDone">Due cards: {{ dueCards.length }} · Card {{ Math.min(state.studyIndex + 1, dueCards.length) }} / {{ dueCards.length }}</p>
+        <div v-if="state.sessionDone" class="notice neon">
+          Session complete. You reviewed {{ dueCards.length }} due cards.
+        </div>
+        <template v-else-if="activeStudyCard">
+          <article class="study-card">
+            <h3>{{ activeStudyCard.front_text }}</h3>
+            <p v-if="state.revealAnswer">{{ activeStudyCard.back_text }}</p>
+            <button class="btn" v-if="!state.revealAnswer" @click="state.revealAnswer = true">Reveal answer</button>
+            <div class="row" v-else>
+              <button class="btn ghost" @click="applyStudyGrade(false)">Not quite</button>
+              <button class="btn neon-btn" @click="applyStudyGrade(true)">Got it</button>
             </div>
           </article>
-          <div v-if="appState.cards.length === 0" class="muted">No cards yet for this subject.</div>
-        </div>
+        </template>
+        <div v-else class="muted">No cards are due right now. Come back later or create more cards.</div>
       </section>
     </main>
 
-    <div class="loading" v-else>Loading FL4SH Lite...</div>
-
-    <div class="modal" v-if="appState.showUpsell">
-      <div class="modal-card">
-        <h3>{{ appState.upsellTitle }}</h3>
-        <p>{{ appState.upsellMessage }}</p>
-        <div class="cta-row">
-          <a :href="APP_STORE_URL" target="_blank" rel="noopener">App Store</a>
-          <a :href="PLAY_STORE_URL" target="_blank" rel="noopener">Google Play</a>
-          <a :href="WEBSITE_URL" target="_blank" rel="noopener">Website</a>
+    <div class="modal" v-if="state.showUpsell">
+      <div class="modal-card neon">
+        <h3>{{ state.upsellTitle }}</h3>
+        <p>{{ state.upsellMessage }}</p>
+        <div class="badge-row">
+          <a :href="LINKS.appStore" target="_blank" rel="noopener" class="store-badge">
+            <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" />
+          </a>
+          <a :href="LINKS.playStore" target="_blank" rel="noopener" class="store-badge">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" />
+          </a>
         </div>
-        <button class="btn" @click="closeUpsell">Continue in Lite</button>
+        <button class="btn neon-btn" @click="closeUpsell">Continue in Lite</button>
       </div>
     </div>
   </div>
