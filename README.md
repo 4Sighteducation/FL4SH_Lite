@@ -17,9 +17,31 @@ FL4SH Lite is a Knack-authenticated web experience designed to give VESPA studen
 - Android: https://play.google.com/store/apps/details?id=com.foursighteducation.flash&pcampaignid=web_share
 - Website: https://www.fl4shcards.com
 
-## Next implementation steps
+## Frontend local setup
 
-1. Deploy functions from `supabase/functions/*`
-2. Add frontend shell to call `fl4sh-lite-context` on load
-3. Add persistent CTA banner + limit popups
-4. Wire Knack loader scene/view to the Lite app
+1. Copy `.env.example` to `.env`
+2. Set:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_FL4SH_LITE_BRIDGE_SECRET` (if configured in function secrets)
+3. Run:
+   - `npm install`
+   - `npm run dev`
+
+For local testing outside Knack, keep `VITE_ENABLE_LOCAL_MOCK=true`.
+
+## Production deploy (Vercel)
+
+- Build command: `npm run build`
+- Output directory: `dist`
+- Add the same env vars in Vercel project settings.
+
+## App behavior in this repo
+
+- Desktop/tablet-first UI for subject selection + flashcards
+- Manual card creation via `fl4sh-lite-create-card`
+- AI generation via `fl4sh-lite-generate-cards` (reusing FL4SH generator endpoint for prompt parity)
+- Strong upsell CTAs to:
+  - iOS app
+  - Android app
+  - fl4shcards.com
