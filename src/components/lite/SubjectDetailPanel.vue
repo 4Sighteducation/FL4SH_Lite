@@ -54,6 +54,14 @@ const filteredTopicRows = computed(() => {
   if (!query) return props.topicRows
   return allTopicRows.value.filter((row) => String(row.label || '').toLowerCase().includes(query))
 })
+
+const totalCards = computed(() => Number(props.cards?.length || 0))
+function progressPercent(count) {
+  const total = totalCards.value
+  if (!total) return 0
+  const c = Number(count || 0)
+  return Math.max(0, Math.min(100, Math.round((c / total) * 100)))
+}
 </script>
 
 <template>
@@ -66,62 +74,102 @@ const filteredTopicRows = computed(() => {
       </div>
     </div>
     <div class="muted">{{ props.selectedSubjectMeta() }}</div>
-    <div class="stat-chip-row">
-      <span class="stat-chip">Cards: {{ props.cards.length }}</span>
-      <span class="stat-chip">Topics: {{ props.topicCount }}</span>
-      <span class="stat-chip">Due now: {{ props.dueCount }}</span>
-      <span class="stat-chip">Mastered: {{ props.masteredCount }}</span>
+
+    <div class="sd-action-cards">
+      <button class="sd-action-card create" @click="emit('open-create-flow', props.activeTopicFilter || '')">
+        <span class="sd-action-badge cards">{{ props.cards.length }} cards</span>
+        <span class="sd-action-icon">✦</span>
+        <div class="sd-action-title">Create Cards</div>
+        <div class="sd-action-desc">AI-generated or write your own flashcards for any topic</div>
+      </button>
+      <button class="sd-action-card study" @click="emit('start-study')" :disabled="props.dueCount === 0">
+        <span class="sd-action-badge due">{{ props.dueCount }} due</span>
+        <span class="sd-action-icon">⚡</span>
+        <div class="sd-action-title">Start Studying</div>
+        <div class="sd-action-desc">Review your due cards using spaced repetition</div>
+      </button>
     </div>
-    <div class="toolbar" style="margin-top: 8px;">
-      <button class="btn neon-btn" @click="emit('open-create-flow', props.activeTopicFilter || '')">Create Card</button>
+
+    <div class="sd-stats-strip">
+      <div class="sd-stat-cell">
+        <span class="sd-stat-number">{{ props.cards.length }}</span>
+        <span class="sd-stat-label">Cards</span>
+      </div>
+      <div class="sd-stat-cell">
+        <span class="sd-stat-number hot">{{ props.dueCount }}</span>
+        <span class="sd-stat-label">Due now</span>
+      </div>
+      <div class="sd-stat-cell">
+        <span class="sd-stat-number accent">{{ props.topicCount }}</span>
+        <span class="sd-stat-label">Topics</span>
+      </div>
+      <div class="sd-stat-cell">
+        <span class="sd-stat-number correct">{{ props.masteredCount }}</span>
+        <span class="sd-stat-label">Mastered</span>
+      </div>
     </div>
+
     <div class="section-shell">
-      <div class="panel-head">
-        <h3>Topic hierarchy</h3>
-        <button
-          class="mini-btn"
-          v-if="props.hasActiveFilters"
-          @click="emit('set-active-topic-filter', '')"
-        >
-          Reset filters
-        </button>
+      <div class="sd-topic-head">
+        <span class="sd-topic-title">Topics</span>
+        <div class="sd-topic-search">
+          <input v-model="topicSearch" class="sd-topic-search-input" type="search" placeholder="Search topics..." />
+          <button v-if="topicSearch" class="mini-btn ghost" @click="topicSearch = ''">Clear</button>
+          <button class="mini-btn" v-if="props.hasActiveFilters" @click="emit('set-active-topic-filter', '')">Reset</button>
+        </div>
       </div>
-      <small class="muted">Select a topic to open its cards in the modal viewer.</small>
-      <div class="modal-search-row" style="margin-top: 8px;">
-        <input
-          v-model="topicSearch"
-          class="subject-search-input"
-          type="search"
-          placeholder="Search topics..."
-        />
-        <button
-          v-if="topicSearch"
-          class="mini-btn ghost"
-          @click="topicSearch = ''"
-        >
-          Clear
-        </button>
-      </div>
+
       <div v-if="props.topicTreeLoading" class="muted">Loading topic tree...</div>
       <div v-else-if="props.topicTreeError" class="muted">{{ props.topicTreeError }}</div>
-      <div class="topic-tree-list">
-        <button class="topic-row all" :class="{ active: !props.activeTopicFilter }" @click="emit('set-active-topic-filter', '')">
-          <span>All topics</span>
-          <strong>{{ props.cards.length }}</strong>
+
+      <div class="sd-topic-tree">
+        <button
+          class="sd-topic-row all-row"
+          :class="{ active: !props.activeTopicFilter }"
+          data-depth="0"
+          @click="emit('set-active-topic-filter', '')"
+        >
+          <span class="sd-topic-expand leaf">›</span>
+          <span class="sd-topic-name">All topics</span>
+          <div class="sd-topic-meta">
+            <div class="sd-topic-progress-bar">
+              <div class="sd-topic-progress-fill" :style="{ width: `${progressPercent(props.cards.length)}%` }"></div>
+            </div>
+            <span class="sd-topic-count" :class="{ 'has-cards': props.cards.length > 0 }">{{ props.cards.length }}</span>
+          </div>
         </button>
+
         <button
           v-for="row in filteredTopicRows"
           :key="row.id"
-          class="topic-row"
-          :class="{ active: props.activeTopicFilter === row.topic_code }"
-          :style="{ marginLeft: `${row.depth * 12}px`, borderLeftColor: props.getSubjectColor(props.selectedSubjectKey) }"
+          class="sd-topic-row"
+          :class="{
+            active: props.activeTopicFilter === row.topic_code,
+            'leaf-topic': !row.hasChildren,
+          }"
+          :data-depth="row.depth"
           @click="emit('toggle-topic-row', row)"
         >
-          <span class="topic-label">
-            <span v-if="row.hasChildren">{{ props.expandedTopics[row.id] ? '▾' : '▸' }}</span>
-            {{ row.label }}
+          <span
+            class="sd-topic-expand"
+            :class="{
+              open: row.hasChildren && props.expandedTopics[row.id],
+              leaf: !row.hasChildren,
+            }"
+          >
+            ›
           </span>
-          <strong>{{ row.count || 0 }}</strong>
+          <span class="sd-topic-name">{{ row.label }}</span>
+          <div class="sd-topic-meta">
+            <div class="sd-topic-progress-bar">
+              <div
+                class="sd-topic-progress-fill"
+                :class="{ empty: !row.count }"
+                :style="{ width: `${progressPercent(row.count)}%` }"
+              ></div>
+            </div>
+            <span class="sd-topic-count" :class="{ 'has-cards': row.count > 0 }">{{ row.count || 0 }}</span>
+          </div>
         </button>
       </div>
     </div>

@@ -92,10 +92,13 @@ function chooseOption(key) {
 
 function toggleFlip() {
   if (isBusyGrading.value || isMcqCard.value) return
-  isFlipped.value = !isFlipped.value
+  // Flip cards are one-way during a review: front -> back, then self-grade.
+  // Students must commit to correct/incorrect (no "flip back" / no "not yet").
+  if (isFlipped.value) return
+  isFlipped.value = true
   emit('set-reveal-answer', isFlipped.value)
   // When the answer is visible, prompt for self-grade (in-modal, not on page footer).
-  if (isFlipped.value) showSelfGrade.value = true
+  showSelfGrade.value = true
 }
 
 function closeSelfGrade() {
@@ -261,13 +264,10 @@ function selfGrade(correct) {
           <div class="study-grade-modal" v-if="showSelfGrade && !isMcqCard">
             <div class="study-grade-card">
               <h4>How did you do?</h4>
-              <p class="muted">Mark yourself and we’ll move to the next card automatically.</p>
+              <p class="muted">Choose one — we’ll move to the next card automatically.</p>
               <div class="grade-buttons">
                 <button class="grade-btn incorrect" @click="selfGrade(false)">✕ Incorrect<span class="grade-label">Back to Box 1</span></button>
                 <button class="grade-btn got-it" @click="selfGrade(true)">✓ Got it<span class="grade-label">Move forward</span></button>
-              </div>
-              <div class="toolbar" style="justify-content:flex-end;margin-top:10px;">
-                <button class="mini-btn ghost" @click="closeSelfGrade">Not yet</button>
               </div>
             </div>
           </div>
