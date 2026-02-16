@@ -73,7 +73,7 @@ const filteredTopicRows = computed(() => {
       <span class="stat-chip">Mastered: {{ props.masteredCount }}</span>
     </div>
     <div class="toolbar" style="margin-top: 8px;">
-      <button class="btn neon-btn" @click="emit('open-create-flow')">Create Card</button>
+      <button class="btn neon-btn" @click="emit('open-create-flow', props.activeTopicFilter || '')">Create Card</button>
     </div>
     <div class="section-shell">
       <div class="panel-head">

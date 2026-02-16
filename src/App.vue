@@ -72,6 +72,7 @@ const aiPreviewCards = ref([])
 const previewFlippedByKey = ref({})
 const previewSelectionByKey = ref({})
 const previewMetaCard = ref(null)
+const previewIndex = ref(0)
 const {
   selectedSubject,
   dueCards,
@@ -433,11 +434,28 @@ function resetCreateFlow() {
   previewFlippedByKey.value = {}
   previewSelectionByKey.value = {}
   previewMetaCard.value = null
+  previewIndex.value = 0
 }
 
-function openCreateFlow() {
+function isValidLeafTopic(topicCode) {
+  const code = String(topicCode || '').trim()
+  if (!code) return false
+  return createLeafTopics.value.some((t) => String(t.topic_code) === code)
+}
+
+function openCreateFlow(topicCode = '') {
   clearError()
   resetCreateFlow()
+  const picked = String(topicCode || '').trim()
+  if (picked && isValidLeafTopic(picked)) {
+    createSelectedTopic.value = picked
+    manualSelectedTopic.value = picked
+    aiTopic.value = picked
+    createFlowStep.value = 'method'
+  } else if (createSelectedTopic.value && isValidLeafTopic(createSelectedTopic.value)) {
+    // If the user already selected a leaf topic in the topic tree, skip re-picking.
+    createFlowStep.value = 'method'
+  }
   createFlowOpen.value = true
 }
 
@@ -510,6 +528,7 @@ async function generatePreviewCards() {
     previewFlippedByKey.value = {}
     previewSelectionByKey.value = {}
     previewMetaCard.value = null
+    previewIndex.value = 0
     if (!aiPreviewCards.value.length) {
       state.error = 'No preview cards generated. Try different guidance or topic wording.'
       return
@@ -524,6 +543,26 @@ async function generatePreviewCards() {
 
 function removePreviewCard(index) {
   aiPreviewCards.value = aiPreviewCards.value.filter((_, i) => i !== index)
+  previewIndex.value = Math.max(0, Math.min(previewIndex.value, aiPreviewCards.value.length - 1))
+}
+
+const activePreviewCard = computed(() => aiPreviewCards.value[previewIndex.value] || null)
+const canPrevPreview = computed(() => aiPreviewCards.value.length > 1 && previewIndex.value > 0)
+const canNextPreview = computed(() => aiPreviewCards.value.length > 1 && previewIndex.value < aiPreviewCards.value.length - 1)
+
+function prevPreview() {
+  if (!canPrevPreview.value) return
+  previewIndex.value -= 1
+}
+
+function nextPreview() {
+  if (!canNextPreview.value) return
+  previewIndex.value += 1
+}
+
+function removeActivePreviewCard() {
+  if (!activePreviewCard.value) return
+  removePreviewCard(previewIndex.value)
 }
 
 function previewCardKey(card, index) {
@@ -592,7 +631,7 @@ function previewOptionClass(card, index, optionKey, correctKey) {
   const key = previewCardKey(card, index)
   const selected = String(previewSelectionByKey.value[key] || '')
   return {
-    active: selected === optionKey,
+    selected: selected === optionKey,
     correct: Boolean(correctKey) && optionKey === correctKey && Boolean(selected),
     wrong: Boolean(selected) && selected === optionKey && optionKey !== correctKey,
   }
@@ -891,7 +930,7 @@ onMounted(loadContext)
         @back-home="view = 'home'"
         @set-active-topic-filter="activeTopicFilter = $event"
         @toggle-topic-row="toggleTopicRow"
-        @open-create-flow="openCreateFlow"
+        @open-create-flow="openCreateFlow($event)"
       />
 
       <StudyPanel
@@ -975,7 +1014,11 @@ onMounted(loadContext)
         </template>
 
         <template v-else-if="createFlowStep === 'method'">
-          <p class="muted">Step 2: choose creation method for <strong>{{ createSelectedTopic }}</strong></p>
+          <div class="panel-head" style="margin-bottom: 8px;">
+            <p class="muted" style="margin:0;">Step 2: choose creation method</p>
+            <button class="mini-btn ghost" @click="createFlowStep = 'topic'">Change topic</button>
+          </div>
+          <small class="muted">Topic: <strong>{{ createSelectedTopic }}</strong></small>
           <div class="create-method-grid">
             <button class="create-method-card" @click="chooseCreateMethod('ai')">
               <h4>AI Generated</h4>
@@ -1001,7 +1044,11 @@ onMounted(loadContext)
         </template>
 
         <template v-else-if="createFlowStep === 'ai_options'">
-          <p class="muted">AI generation for <strong>{{ aiTopic }}</strong></p>
+          <div class="panel-head" style="margin-bottom: 8px;">
+            <p class="muted" style="margin:0;">AI generation</p>
+            <button class="mini-btn ghost" @click="createFlowStep = 'method'">Change method</button>
+          </div>
+          <small class="muted">Topic: <strong>{{ aiTopic }}</strong></small>
           <div class="forms">
             <div class="form-card">
               <label class="muted">AI Card Type</label>
@@ -1027,53 +1074,67 @@ onMounted(loadContext)
         </template>
 
         <template v-else-if="createFlowStep === 'ai_preview'">
-          <p class="muted">Preview generated cards. Remove any you do not want before saving.</p>
-          <div class="cards">
-            <article class="card" v-for="(card, index) in aiPreviewCards" :key="`preview-${index}`">
-              <div class="panel-head">
-                <h4>{{ card.front_text }}</h4>
-                <div class="toolbar">
-                  <button class="mini-btn ghost" @click="togglePreviewFlip(card, index)">
-                    {{ isPreviewFlipped(card, index) ? 'Show Front' : 'Flip Card' }}
-                  </button>
-                  <button class="mini-btn" @click="openPreviewMeta(card, index)">Details</button>
-                </div>
-              </div>
-              <div class="flip-shell" :class="{ flipped: isPreviewFlipped(card, index) }">
-                <div class="flip-face front">
-                  <div class="mcq-grid" v-if="parsePreviewMcq(card).options.length">
-                    <button
-                      v-for="option in parsePreviewMcq(card).options"
-                      :key="`${index}-${option.key}`"
-                      class="mcq-option"
-                      :class="previewOptionClass(card, index, option.key, parsePreviewMcq(card).correct)"
-                      @click="choosePreviewOption(card, index, option.key)"
-                    >
-                      <span class="preview-option-key">{{ option.key }}</span>
-                      <span class="preview-option-text">{{ option.text }}</span>
-                    </button>
-                  </div>
-                  <p class="preview-face-text" v-else>{{ card.front_text }}</p>
-                </div>
-                <div class="flip-face back">
-                  <p class="preview-face-text">
-                    {{ parsePreviewMcq(card).info || shortLine(card.back_text, 380) }}
-                  </p>
-                  <div v-if="parsePreviewMcq(card).correct" class="review-feedback success">
-                    Correct answer: {{ parsePreviewMcq(card).correct }}
-                  </div>
-                </div>
-              </div>
-              <div class="card-actions">
-                <button @click="removePreviewCard(index)">Remove</button>
-              </div>
-            </article>
+          <div class="preview-header-row">
+            <span class="muted">Preview generated cards</span>
+            <div class="toolbar">
+              <button class="mini-btn ghost" @click="createFlowStep = 'ai_options'">Back</button>
+              <button class="mini-btn" :disabled="!canPrevPreview" @click="prevPreview">‹</button>
+              <span class="mini-chip">{{ aiPreviewCards.length ? `${previewIndex + 1} / ${aiPreviewCards.length}` : '0 / 0' }}</span>
+              <button class="mini-btn" :disabled="!canNextPreview" @click="nextPreview">›</button>
+            </div>
           </div>
+
+          <div class="preview-stage" v-if="activePreviewCard">
+            <div class="preview-counter">{{ previewIndex + 1 }} / {{ aiPreviewCards.length }}</div>
+
+            <div class="preview-body">
+              <div class="preview-question">
+                {{ activePreviewCard.front_text }}
+              </div>
+
+              <div class="preview-options" v-if="parsePreviewMcq(activePreviewCard).options.length">
+                <button
+                  v-for="opt in parsePreviewMcq(activePreviewCard).options"
+                  :key="`opt-${previewIndex}-${opt.key}`"
+                  class="preview-option"
+                  :class="previewOptionClass(activePreviewCard, previewIndex, opt.key, parsePreviewMcq(activePreviewCard).correct)"
+                  @click="choosePreviewOption(activePreviewCard, previewIndex, opt.key)"
+                >
+                  <span class="preview-option-key">{{ opt.key }}</span>
+                  <span class="preview-option-text">{{ opt.text }}</span>
+                </button>
+              </div>
+
+              <div class="preview-answer" v-else>
+                <div class="preview-answer-head">
+                  <span class="muted">Answer</span>
+                  <button class="mini-btn ghost" @click="togglePreviewFlip(activePreviewCard, previewIndex)">
+                    {{ isPreviewFlipped(activePreviewCard, previewIndex) ? 'Hide' : 'Reveal' }}
+                  </button>
+                </div>
+                <div v-if="isPreviewFlipped(activePreviewCard, previewIndex)" class="preview-answer-box">
+                  {{ shortLine(activePreviewCard.back_text, 520) }}
+                </div>
+              </div>
+            </div>
+
+            <div class="preview-footer">
+              <div class="preview-footer-left">
+                <button class="preview-footer-btn remove" @click="removeActivePreviewCard">Remove</button>
+                <button class="preview-footer-btn info" @click="openPreviewMeta(activePreviewCard, previewIndex)">More info</button>
+              </div>
+              <button class="btn neon-btn" :disabled="state.busy || aiPreviewCards.length === 0" @click="savePreviewCardsToBank">
+                {{ state.busy ? 'Saving...' : `Save ${aiPreviewCards.length} card${aiPreviewCards.length === 1 ? '' : 's'}` }}
+              </button>
+            </div>
+          </div>
+
+          <div v-else class="muted" style="padding: 10px 2px;">
+            All preview cards removed. Go back to generate more.
+          </div>
+
           <div class="toolbar" style="margin-top:8px;">
-            <button class="btn ghost" @click="createFlowStep = 'ai_options'">Back</button>
-            <button class="btn neon-btn" :disabled="state.busy || aiPreviewCards.length === 0" @click="savePreviewCardsToBank">
-              {{ state.busy ? 'Saving...' : `Save ${aiPreviewCards.length} card${aiPreviewCards.length === 1 ? '' : 's'}` }}
-            </button>
+            <button class="btn ghost" @click="createFlowStep = 'ai_options'">Generate different cards</button>
           </div>
         </template>
       </div>
