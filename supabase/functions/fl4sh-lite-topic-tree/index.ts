@@ -85,7 +85,7 @@ function parseSubjectKey(subjectKey: string) {
   };
 }
 
-async function resolveSubjectRow(curriculumDb: any, subjectKey: string, userId: string) {
+async function resolveSubjectRow(curriculumDb: any, appDb: any, subjectKey: string, userId: string) {
   const { examBoard, qualification, subjectCode } = parseSubjectKey(subjectKey);
   if (subjectCode) {
     const { data: byCode } = await curriculumDb
@@ -97,7 +97,7 @@ async function resolveSubjectRow(curriculumDb: any, subjectKey: string, userId: 
     if (byCode?.id) return byCode;
   }
 
-  const { data: selectedSubject } = await curriculumDb
+  const { data: selectedSubject } = await appDb
     .from("fl4sh_lite_user_subjects")
     .select("subject_name,exam_board,qualification_type")
     .eq("user_id", userId)
@@ -111,19 +111,13 @@ async function resolveSubjectRow(curriculumDb: any, subjectKey: string, userId: 
 
   const { data: candidates } = await curriculumDb
     .from("exam_board_subjects")
-    .select(`
-      id,
-      subject_code,
-      subject_name,
-      exam_boards(code, full_name),
-      qualification_types(code)
-    `)
-    .ilike("subject_name", subjectName)
+    .select("id,subject_code,subject_name")
+    .ilike("subject_name", `%${subjectName}%`)
     .limit(50);
 
   const best = (candidates || []).find((row: any) => {
-    const rowBoard = String(row?.exam_boards?.code || row?.exam_boards?.full_name || "").trim().toUpperCase();
-    const rowQualification = String(row?.qualification_types?.code || "").trim().toUpperCase();
+    const rowBoard = String(row?.exam_board || "").trim().toUpperCase();
+    const rowQualification = String(row?.qualification_type || "").trim().toUpperCase();
     const boardOk = !boardMatch || !rowBoard || rowBoard === boardMatch;
     const qualificationOk =
       !qualificationMatch || !rowQualification || rowQualification === qualificationMatch || rowQualification.includes(qualificationMatch);
@@ -197,7 +191,7 @@ serve(async (req: Request) => {
       countsByTopic.set(key, (countsByTopic.get(key) || 0) + 1);
     }
 
-    const subjectRow = await resolveSubjectRow(curriculumDb, subjectKey, user.id);
+    const subjectRow = await resolveSubjectRow(curriculumDb, appDb, subjectKey, user.id);
     if (!subjectRow?.id) {
       const fallback = Array.from(countsByTopic.keys()).sort().map((topicName, index) => ({
         id: `fallback-${index + 1}`,

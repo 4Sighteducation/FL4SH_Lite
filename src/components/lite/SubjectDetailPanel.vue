@@ -8,6 +8,7 @@ const props = defineProps({
   topicTreeLoading: { type: Boolean, required: true },
   topicTreeError: { type: String, required: true },
   activeTopicFilter: { type: String, required: true },
+  topicTree: { type: Array, required: true },
   topicRows: { type: Array, required: true },
   expandedTopics: { type: Object, required: true },
   selectedSubjectKey: { type: String, required: true },
@@ -28,10 +29,30 @@ const emit = defineEmits([
 ])
 
 const topicSearch = ref('')
+const allTopicRows = computed(() => {
+  const out = []
+  const walk = (nodes, depth = 0) => {
+    ;(Array.isArray(nodes) ? nodes : []).forEach((node) => {
+      const id = String(node?.id || node?.topic_code || node?.topic_name || '')
+      const children = Array.isArray(node?.children) ? node.children : []
+      out.push({
+        id,
+        depth,
+        label: String(node?.topic_name || node?.topic_code || ''),
+        topic_code: String(node?.topic_code || node?.topic_name || ''),
+        count: Number(node?.card_count || 0),
+        hasChildren: children.length > 0,
+      })
+      if (children.length) walk(children, depth + 1)
+    })
+  }
+  walk(props.topicTree || [])
+  return out
+})
 const filteredTopicRows = computed(() => {
   const query = topicSearch.value.trim().toLowerCase()
   if (!query) return props.topicRows
-  return props.topicRows.filter((row) => String(row.label || '').toLowerCase().includes(query))
+  return allTopicRows.value.filter((row) => String(row.label || '').toLowerCase().includes(query))
 })
 </script>
 

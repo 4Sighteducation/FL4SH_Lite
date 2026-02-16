@@ -69,6 +69,9 @@ const createSelectedTopic = ref('')
 const createSelectedMethod = ref('')
 const aiGuidance = ref('')
 const aiPreviewCards = ref([])
+const previewFlippedByKey = ref({})
+const previewSelectionByKey = ref({})
+const previewMetaCard = ref(null)
 const {
   selectedSubject,
   dueCards,
@@ -126,11 +129,37 @@ const topicCountInSubject = computed(() => {
   )
   return set.size
 })
+const createLeafTopics = computed(() => {
+  const out = []
+  const walk = (nodes, path = []) => {
+    ;(Array.isArray(nodes) ? nodes : []).forEach((node) => {
+      const name = String(node?.topic_name || node?.topic_code || '').trim()
+      const code = String(node?.topic_code || node?.topic_name || '').trim()
+      if (!name || !code) return
+      const nextPath = [...path, name]
+      const children = Array.isArray(node?.children) ? node.children : []
+      if (!children.length) {
+        out.push({
+          id: String(node?.id || code),
+          topic_code: code,
+          label: nextPath.join(' > '),
+          count: Number(node?.card_count || 0),
+        })
+        return
+      }
+      walk(children, nextPath)
+    })
+  }
+  walk(topicTree.value || [])
+  return out
+})
 const createTopicCandidates = computed(() => {
   const q = createTopicSearch.value.trim().toLowerCase()
-  return topicRows.value
-    .filter((row) => !row.hasChildren)
-    .filter((row) => !q || String(row.label || '').toLowerCase().includes(q) || String(row.topic_code || '').toLowerCase().includes(q))
+  return createLeafTopics.value.filter((row) =>
+    !q ||
+    String(row.label || '').toLowerCase().includes(q) ||
+    String(row.topic_code || '').toLowerCase().includes(q)
+  )
 })
 const canPrevModalCard = computed(() => topicModalCardIds.value.length > 1 && topicModalIndex.value > 0)
 const canNextModalCard = computed(
@@ -401,6 +430,9 @@ function resetCreateFlow() {
   aiTopic.value = createSelectedTopic.value
   aiGuidance.value = ''
   aiPreviewCards.value = []
+  previewFlippedByKey.value = {}
+  previewSelectionByKey.value = {}
+  previewMetaCard.value = null
 }
 
 function openCreateFlow() {
@@ -475,6 +507,9 @@ async function generatePreviewCards() {
       preview_only: true,
     })
     aiPreviewCards.value = Array.isArray(data.preview_cards) ? data.preview_cards : []
+    previewFlippedByKey.value = {}
+    previewSelectionByKey.value = {}
+    previewMetaCard.value = null
     if (!aiPreviewCards.value.length) {
       state.error = 'No preview cards generated. Try different guidance or topic wording.'
       return
@@ -489,6 +524,96 @@ async function generatePreviewCards() {
 
 function removePreviewCard(index) {
   aiPreviewCards.value = aiPreviewCards.value.filter((_, i) => i !== index)
+}
+
+function previewCardKey(card, index) {
+  const previewId = String(card?.preview_id || '').trim()
+  if (previewId) return previewId
+  const front = String(card?.front_text || '').trim()
+  return `${index}:${front.slice(0, 60)}`
+}
+
+function normalizeOptionText(value) {
+  return String(value || '').trim().replace(/^([A-D])[)\].:\-]\s*/i, '')
+}
+
+function parsePreviewMcq(card) {
+  const backText = String(card?.back_text || '')
+  const lines = backText
+    .split('\n')
+    .map((line) => String(line || '').trim())
+    .filter(Boolean)
+
+  const options = []
+  const infoLines = []
+  lines.forEach((line) => {
+    const optionMatch = line.match(/^([A-D])[)\].:\-]\s*(.+)$/i)
+    if (optionMatch) {
+      options.push({
+        key: String(optionMatch[1] || '').toUpperCase(),
+        text: normalizeOptionText(optionMatch[2] || ''),
+      })
+      return
+    }
+    if (/^correct\s*answer\s*[:\-]?\s*[A-D]/i.test(line)) return
+    infoLines.push(line)
+  })
+
+  const correct = String((backText.match(/correct\s*answer\s*[:\-]?\s*([A-D])/i) || [])[1] || '').toUpperCase()
+  return {
+    options,
+    correct,
+    info: infoLines.join('\n').trim(),
+  }
+}
+
+function isPreviewFlipped(card, index) {
+  const key = previewCardKey(card, index)
+  return Boolean(previewFlippedByKey.value[key])
+}
+
+function togglePreviewFlip(card, index) {
+  const key = previewCardKey(card, index)
+  previewFlippedByKey.value = {
+    ...previewFlippedByKey.value,
+    [key]: !previewFlippedByKey.value[key],
+  }
+}
+
+function choosePreviewOption(card, index, optionKey) {
+  const key = previewCardKey(card, index)
+  previewSelectionByKey.value = {
+    ...previewSelectionByKey.value,
+    [key]: optionKey,
+  }
+}
+
+function previewOptionClass(card, index, optionKey, correctKey) {
+  const key = previewCardKey(card, index)
+  const selected = String(previewSelectionByKey.value[key] || '')
+  return {
+    active: selected === optionKey,
+    correct: Boolean(correctKey) && optionKey === correctKey && Boolean(selected),
+    wrong: Boolean(selected) && selected === optionKey && optionKey !== correctKey,
+  }
+}
+
+function openPreviewMeta(card, index) {
+  const parsed = parsePreviewMcq(card)
+  previewMetaCard.value = {
+    index: index + 1,
+    type: String(card?.card_type || 'unknown'),
+    topic: String(card?.topic_code || aiTopic.value || '').trim(),
+    front: String(card?.front_text || '').trim(),
+    back: String(card?.back_text || '').trim(),
+    optionCount: parsed.options.length,
+    correct: parsed.correct,
+    info: parsed.info,
+  }
+}
+
+function closePreviewMeta() {
+  previewMetaCard.value = null
 }
 
 async function savePreviewCardsToBank() {
@@ -758,6 +883,7 @@ onMounted(loadContext)
         :topic-tree-loading="state.topicTreeLoading"
         :topic-tree-error="state.topicTreeError"
         :active-topic-filter="activeTopicFilter"
+        :topic-tree="topicTree"
         :topic-rows="topicRows"
         :expanded-topics="expandedTopics"
         :selected-subject-key="state.selectedSubjectKey"
@@ -848,6 +974,9 @@ onMounted(loadContext)
               <span class="topic-label">{{ row.label }}</span>
               <strong>{{ row.count || 0 }}</strong>
             </button>
+            <div v-if="!createTopicCandidates.length" class="muted" style="padding: 8px 4px;">
+              No topics found for this subject. Load the topic tree first, then try again.
+            </div>
           </div>
         </template>
 
@@ -907,11 +1036,41 @@ onMounted(loadContext)
           <p class="muted">Preview generated cards. Remove any you do not want before saving.</p>
           <div class="cards">
             <article class="card" v-for="(card, index) in aiPreviewCards" :key="`preview-${index}`">
-              <h4>{{ card.front_text }}</h4>
+              <div class="panel-head">
+                <h4>{{ card.front_text }}</h4>
+                <div class="toolbar">
+                  <button class="mini-btn ghost" @click="togglePreviewFlip(card, index)">
+                    {{ isPreviewFlipped(card, index) ? 'Show Front' : 'Flip Card' }}
+                  </button>
+                  <button class="mini-btn" @click="openPreviewMeta(card, index)">Details</button>
+                </div>
+              </div>
               <small class="muted">Type: {{ card.card_type }}</small>
-              <p>{{ shortLine(card.back_text, 220) }}</p>
+              <div class="flip-shell" :class="{ flipped: isPreviewFlipped(card, index) }">
+                <div class="flip-face front">
+                  <p class="preview-face-text">{{ card.front_text }}</p>
+                  <div class="mcq-grid" v-if="parsePreviewMcq(card).options.length">
+                    <button
+                      v-for="option in parsePreviewMcq(card).options"
+                      :key="`${index}-${option.key}`"
+                      class="mcq-option"
+                      :class="previewOptionClass(card, index, option.key, parsePreviewMcq(card).correct)"
+                      @click="choosePreviewOption(card, index, option.key)"
+                    >
+                      <strong>{{ option.key }})</strong> {{ option.text }}
+                    </button>
+                  </div>
+                </div>
+                <div class="flip-face back">
+                  <p class="preview-face-text">
+                    {{ parsePreviewMcq(card).info || shortLine(card.back_text, 380) }}
+                  </p>
+                  <div v-if="parsePreviewMcq(card).correct" class="review-feedback success">
+                    Correct answer: {{ parsePreviewMcq(card).correct }}
+                  </div>
+                </div>
+              </div>
               <div class="card-actions">
-                <span>{{ card.topic_code || aiTopic }}</span>
                 <button @click="removePreviewCard(index)">Remove</button>
               </div>
             </article>
@@ -923,6 +1082,45 @@ onMounted(loadContext)
             </button>
           </div>
         </template>
+      </div>
+    </div>
+
+    <div class="modal" v-if="previewMetaCard">
+      <div class="modal-card neon">
+        <div class="panel-head">
+          <h3>Card Metadata</h3>
+          <button class="mini-btn" @click="closePreviewMeta">Close</button>
+        </div>
+        <div class="card-detail-grid">
+          <div>
+            <strong>Preview card</strong>
+            <span>#{{ previewMetaCard.index }}</span>
+          </div>
+          <div>
+            <strong>Type</strong>
+            <span>{{ previewMetaCard.type }}</span>
+          </div>
+          <div>
+            <strong>Topic</strong>
+            <span>{{ previewMetaCard.topic || 'Not set' }}</span>
+          </div>
+          <div>
+            <strong>MCQ options</strong>
+            <span>{{ previewMetaCard.optionCount }}</span>
+          </div>
+          <div>
+            <strong>Correct option</strong>
+            <span>{{ previewMetaCard.correct || 'Not detected' }}</span>
+          </div>
+          <div>
+            <strong>Question length</strong>
+            <span>{{ previewMetaCard.front.length }} chars</span>
+          </div>
+        </div>
+        <div class="section-shell">
+          <strong class="muted">Additional information</strong>
+          <p>{{ previewMetaCard.info || 'No additional metadata extracted from this card.' }}</p>
+        </div>
       </div>
     </div>
 

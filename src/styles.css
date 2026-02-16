@@ -554,6 +554,20 @@ textarea, input, select {
   background: #101b3a;
   padding: 10px;
 }
+.card .flip-shell {
+  margin-top: 8px;
+  min-height: 190px;
+}
+.card .flip-face {
+  min-height: 190px;
+  background: #0e1938;
+}
+.preview-face-text {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+  color: #d9e5ff;
+  line-height: 1.45;
+}
 .card p { margin: 6px 0 0; white-space: pre-wrap; color: #d7dfff; }
 .due-tag,
 .scheduled-tag {
@@ -574,7 +588,7 @@ textarea, input, select {
   color: #d6e5ff;
   background: rgba(66, 91, 150, 0.2);
 }
-.card-actions { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
+.card-actions { margin-top: 8px; display: flex; justify-content: flex-end; align-items: center; }
 .card-actions button {
   border: 1px solid #5f76ba;
   background: transparent;
