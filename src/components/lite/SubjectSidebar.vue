@@ -32,9 +32,9 @@ function onColorInput(subjectKey, event) {
         @click="emit('open-subject', s.subject_key)"
         :style="{ borderColor: props.getSubjectColor(s.subject_key) }"
       >
-        <span>{{ s.subject_name }}</span>
-        <small>{{ s.exam_board }} · {{ s.qualification_type }}</small>
-        <small>{{ s.card_count || 0 }}/{{ props.limits.max_cards_per_subject }} cards</small>
+        <span class="subject-name">{{ s.subject_name }}</span>
+        <small class="subject-meta">{{ s.exam_board }} · {{ s.qualification_type }}</small>
+        <small class="subject-count">{{ s.card_count || 0 }}/{{ props.limits.max_cards_per_subject }} cards</small>
         <label class="subject-color-row">
           <span>Color</span>
           <input

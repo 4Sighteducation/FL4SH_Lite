@@ -90,9 +90,12 @@ async function fetchCatalogRows(curriculumClient: any, qualificationLevel?: stri
     .select("subject_key,subject_name,exam_board,qualification_type")
     .limit(Number.isFinite(maxRows) ? maxRows : 500);
   const normalized = normalizeQualification(qualificationLevel ?? null);
-  if (normalized) query = query.ilike("qualification_type", `%${normalized}%`);
   const { data, error } = await query;
-  if (!error) return (data || []).filter((r: any) => r?.subject_key);
+  if (!error) {
+    return (data || [])
+      .filter((r: any) => r?.subject_key)
+      .filter((r: any) => qualificationMatches(r?.qualification_type, normalized));
+  }
 
   // Fallback: align with FLASH production schema
   const { data: prodRows, error: prodError } = await curriculumClient

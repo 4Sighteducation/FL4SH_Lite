@@ -1,4 +1,5 @@
 export const examLevelChoices = [
+  { label: 'All levels', values: [] },
   { label: 'GCSE', values: ['GCSE'] },
   { label: 'A Level', values: ['A_LEVEL', 'A-LEVEL', 'A Level'] },
   { label: 'International GCSE', values: ['INTERNATIONAL_GCSE', 'IGCSE', 'I_GCSE'] },

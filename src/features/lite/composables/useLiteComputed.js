@@ -2,6 +2,24 @@ import { computed } from 'vue'
 import { boxConfig, examLevelChoices } from '../constants'
 import { cardBox, flattenTopicRows } from '../utils'
 
+function normalizeCode(value) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_')
+}
+
+function qualificationMatches(subjectLevel, levelValues) {
+  if (!Array.isArray(levelValues) || !levelValues.length) return true
+  const normalizedSubject = normalizeCode(subjectLevel)
+  if (!normalizedSubject) return false
+  return levelValues.some((candidate) => {
+    const normalizedCandidate = normalizeCode(candidate)
+    return (
+      normalizedSubject === normalizedCandidate ||
+      normalizedSubject.includes(normalizedCandidate) ||
+      normalizedCandidate.includes(normalizedSubject)
+    )
+  })
+}
+
 export function useLiteComputed({
   state,
   subjectSearch,
@@ -56,13 +74,14 @@ export function useLiteComputed({
   const filteredModalSubjects = computed(() => {
     const q = modalSearch.value.trim().toLowerCase()
     const choice = examLevelChoices.find((x) => x.label === modalLevel.value)
-    const levelSet = new Set((choice?.values || []).map((v) => String(v).toUpperCase()))
+    const levelValues = Array.isArray(choice?.values) ? choice.values : []
     return state.availableSubjects.filter((s) => {
-      const subjectLevel = String(s.qualification_type || '').toUpperCase()
-      const levelOk = !modalLevel.value || levelSet.has(subjectLevel)
+      const subjectLevel = String(s.qualification_type || '')
+      const levelOk = !modalLevel.value || qualificationMatches(subjectLevel, levelValues)
       const textOk = !q
         || String(s.subject_name || '').toLowerCase().includes(q)
         || String(s.exam_board || '').toLowerCase().includes(q)
+        || String(s.qualification_type || '').toLowerCase().includes(q)
       return levelOk && textOk
     })
   })

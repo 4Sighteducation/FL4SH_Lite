@@ -21,6 +21,7 @@ import {
   listLiteCards,
   saveLiteSubjects,
   submitLiteReview,
+  trackLiteUpsellEvent,
 } from './features/lite/services/liteClient'
 import {
   formatDate,
@@ -51,6 +52,7 @@ const subjectSearch = ref('')
 const activeBoxFilter = ref(0)
 const pulseBox = ref(0)
 const movingCardText = ref('')
+const currentUpsellPlacement = ref('general')
 const modalLevel = ref('')
 const modalSearch = ref('')
 const subjectColors = ref({})
@@ -88,41 +90,102 @@ function setSubjectColorFromSidebar(payload) {
   setSubjectColor(payload?.subjectKey, payload?.color)
 }
 
-function neonUpsell(title, message) {
+async function trackEventSafe(eventType, placement, payload = {}) {
+  try {
+    await trackLiteUpsellEvent(callFn, eventType, placement, payload)
+  } catch {
+    // Best-effort telemetry only.
+  }
+}
+
+function openUpsell(title, message, placement = 'general', payload = {}) {
+  currentUpsellPlacement.value = placement
   state.upsellTitle = title
   state.upsellMessage = message
   state.showUpsell = true
+  trackEventSafe('upsell_impression', placement, payload)
 }
 
 function closeUpsell() {
   state.showUpsell = false
+  trackEventSafe('upsell_dismiss', currentUpsellPlacement.value)
 }
 
 function clearError() {
   state.error = ''
+}
+function getErrorCode(error) {
+  const code = String(error?.code || error?.message || '').trim()
+  if (!code) return ''
+  return code.toUpperCase()
+}
+function handleLiteError(error, fallbackMessage, placement = 'general') {
+  const code = getErrorCode(error)
+  if (code.includes('CARD_LIMIT_REACHED')) {
+    openUpsell(
+      'Lite card limit reached',
+      `FL4SH Lite allows ${state.limits.max_cards_per_subject} cards per subject. Get the full FL4SH app for unlimited cards and full study tools.`,
+      placement,
+      { error_code: code }
+    )
+    state.error = ''
+    return
+  }
+  if (code.includes('SUBJECT_LIMIT_REACHED')) {
+    openUpsell(
+      'Subject limit reached in Lite',
+      `FL4SH Lite allows ${state.limits.max_subjects} subjects. Download the real FL4SH app for unlimited subjects.`,
+      placement,
+      { error_code: code }
+    )
+    state.error = ''
+    return
+  }
+  if (code.includes('SUBJECT_NOT_SELECTED')) {
+    state.error = 'Select and save a subject before creating cards.'
+    return
+  }
+  state.error = error?.message || fallbackMessage
+}
+function onHeaderStoreClick(channel) {
+  trackEventSafe('header_store_click', 'header', { channel })
+}
+function onHeaderWebsiteClick(placement) {
+  trackEventSafe('header_website_click', placement || 'header_notice')
+}
+function onUpsellStoreClick(channel) {
+  trackEventSafe('upsell_store_click', currentUpsellPlacement.value, { channel })
+}
+function onStudyStoreClick(channel) {
+  trackEventSafe('study_store_click', state.sessionDone ? 'study_complete' : 'study_empty', { channel })
 }
 function openSubjectModal() {
   subjectDraft.value = state.selectedSubjects.map((s) => s.subject_key)
   modalSearch.value = ''
   modalLevel.value = examLevelChoices[0]?.label || ''
   state.showSubjectModal = true
+  trackEventSafe('subject_modal_open', 'subject_modal', { preselected: subjectDraft.value.length })
 }
 function closeSubjectModal() {
   state.showSubjectModal = false
+  trackEventSafe('subject_modal_close', 'subject_modal', { selected_draft: subjectDraft.value.length })
 }
 function selectSubjectFromModal(subjectKey) {
   if (subjectDraft.value.includes(subjectKey)) {
     subjectDraft.value = subjectDraft.value.filter((x) => x !== subjectKey)
+    trackEventSafe('subject_unselected', 'subject_modal', { subject_key: subjectKey, count: subjectDraft.value.length })
     return
   }
   if (subjectDraft.value.length >= state.limits.max_subjects) {
-    neonUpsell(
+    openUpsell(
       'Subject limit reached in Lite',
-      `FL4SH Lite allows ${state.limits.max_subjects} subjects. Download the real FL4SH app for unlimited subjects.`
+      `FL4SH Lite allows ${state.limits.max_subjects} subjects. Download the real FL4SH app for unlimited subjects.`,
+      'subject_modal'
     )
     return
   }
   subjectDraft.value = [...subjectDraft.value, subjectKey]
+  trackEventSafe('subject_selected', 'subject_modal', { subject_key: subjectKey, count: subjectDraft.value.length })
 }
 
 async function applyStudyGrade(correct) {
@@ -145,7 +208,7 @@ async function applyStudyGrade(correct) {
     state.sessionReviewed += 1
     if (dueCards.value.length === 0) state.sessionDone = true
   } catch (e) {
-    state.error = e.message || 'Could not submit review.'
+    handleLiteError(e, 'Could not submit review.', 'study_mode')
   } finally {
     state.busy = false
   }
@@ -167,7 +230,7 @@ async function loadContext() {
     if (!state.selectedSubjects.length) state.showSubjectModal = true
     await loadCards()
   } catch (e) {
-    state.error = e.message || 'Failed to load FL4SH Lite.'
+    handleLiteError(e, 'Failed to load FL4SH Lite.', 'app_load')
   } finally {
     state.loading = false
   }
@@ -188,7 +251,7 @@ async function loadCards() {
     }
     await loadTopicTree()
   } catch (e) {
-    state.error = e.message || 'Failed to load cards.'
+    handleLiteError(e, 'Failed to load cards.', 'cards_list')
   }
 }
 async function loadTopicTree() {
@@ -232,8 +295,9 @@ async function saveSubjects() {
     }
     await loadCards()
     closeSubjectModal()
+    trackEventSafe('subjects_saved', 'subject_modal', { selected_count: state.selectedSubjects.length })
   } catch (e) {
-    state.error = e.message || 'Could not save subjects.'
+    handleLiteError(e, 'Could not save subjects.', 'subject_modal')
   } finally {
     state.busy = false
   }
@@ -291,7 +355,7 @@ async function reviewFromModal(correct) {
       movingCardText.value = ''
     }, 900)
   } catch (e) {
-    state.error = e.message || 'Could not submit review.'
+    handleLiteError(e, 'Could not submit review.', 'card_modal')
   } finally {
     state.busy = false
   }
@@ -324,7 +388,7 @@ async function addManualCard() {
     manualBack.value = ''
     await loadCards()
   } catch (e) {
-    state.error = e.message || 'Could not create card.'
+    handleLiteError(e, 'Could not create card.', 'manual_card_create')
   } finally {
     state.busy = false
   }
@@ -346,10 +410,10 @@ async function generateCards() {
     })
     await loadCards()
     if ((selectedSubject.value?.cards_remaining || 0) <= 0) {
-      neonUpsell('Lite card limit reached', 'Get the full FL4SH app for unlimited cards and full study tools.')
+      openUpsell('Lite card limit reached', 'Get the full FL4SH app for unlimited cards and full study tools.', 'ai_generate')
     }
   } catch (e) {
-    state.error = e.message || 'Could not generate cards.'
+    handleLiteError(e, 'Could not generate cards.', 'ai_generate')
   } finally {
     state.busy = false
   }
@@ -361,7 +425,7 @@ async function deleteCard(cardId) {
     await deleteLiteCard(callFn, cardId)
     await loadCards()
   } catch (e) {
-    state.error = e.message || 'Could not delete card.'
+    handleLiteError(e, 'Could not delete card.', 'card_delete')
   } finally {
     state.busy = false
   }
@@ -380,7 +444,13 @@ onMounted(loadContext)
 
 <template>
   <div class="page">
-    <LiteHeader :user="state.user" :limits="state.limits" :links="LINKS" />
+    <LiteHeader
+      :user="state.user"
+      :limits="state.limits"
+      :links="LINKS"
+      @store-click="onHeaderStoreClick"
+      @website-click="onHeaderWebsiteClick"
+    />
 
     <div v-if="state.error" class="error">{{ state.error }}</div>
     <div v-if="state.catalogWarning" class="error">{{ state.catalogWarning }}</div>
@@ -458,9 +528,11 @@ onMounted(loadContext)
         :session-reviewed="state.sessionReviewed"
         :active-study-card="activeStudyCard"
         :reveal-answer="state.revealAnswer"
+        :links="LINKS"
         @back-to-subject="view = 'subject'"
         @set-reveal-answer="state.revealAnswer = $event"
         @apply-study-grade="applyStudyGrade"
+        @store-click="onStudyStoreClick"
       />
     </main>
 
@@ -470,6 +542,7 @@ onMounted(loadContext)
       :message="state.upsellMessage"
       :links="LINKS"
       @close="closeUpsell"
+      @store-click="onUpsellStoreClick"
     />
 
     <SubjectSelectionModal
@@ -478,6 +551,7 @@ onMounted(loadContext)
       :modal-level="modalLevel"
       :modal-search="modalSearch"
       :filtered-modal-subjects="filteredModalSubjects"
+      :result-count="filteredModalSubjects.length"
       :subject-draft="subjectDraft"
       :max-subjects="state.limits.max_subjects"
       :busy="state.busy"

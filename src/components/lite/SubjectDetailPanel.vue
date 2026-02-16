@@ -125,7 +125,7 @@ function onAiCountInput(event) {
         <input :value="props.manualTopic" @input="onManualTopicInput" placeholder="Topic (optional but recommended)" />
         <textarea :value="props.manualFront" @input="onManualFrontInput" placeholder="Question / front of card"></textarea>
         <textarea :value="props.manualBack" @input="onManualBackInput" placeholder="Answer / back of card"></textarea>
-        <button class="btn neon-btn" :disabled="props.busy" @click="emit('add-manual-card')">Add card</button>
+        <button class="btn neon-btn" :disabled="props.busy" @click="emit('add-manual-card')">{{ props.busy ? 'Saving...' : 'Add card' }}</button>
       </div>
       <div class="form-card">
         <h3>Generate with AI</h3>
@@ -139,12 +139,15 @@ function onAiCountInput(event) {
           </select>
           <input type="number" min="1" max="5" :value="props.aiCount" @input="onAiCountInput" />
         </div>
-        <button class="btn hot" :disabled="props.busy || !props.aiTopic" @click="emit('generate-cards')">Generate cards</button>
+        <button class="btn hot" :disabled="props.busy || !props.aiTopic" @click="emit('generate-cards')">{{ props.busy ? 'Generating...' : 'Generate cards' }}</button>
         <small class="muted">Lite excludes voice feedback on short/essay questions.</small>
       </div>
     </div>
 
     <div class="cards">
+      <div v-if="!props.cards.length" class="notice neon">
+        You do not have any cards in this subject yet. Add one manually or generate with AI to begin.
+      </div>
       <article class="card" v-for="c in props.filteredCards" :key="c.id" @click="emit('open-card-modal', c)">
         <h4>{{ c.front_text }}</h4>
         <small class="muted" v-if="c.topic_code">Topic: {{ c.topic_code }}</small>

@@ -61,6 +61,13 @@ export function getIdentity() {
   return getKnackIdentity() || getLocalMockIdentity()
 }
 
+function createApiError(message, status, code) {
+  const err = new Error(message || `Request failed (${status || 'unknown'})`)
+  err.status = status || null
+  err.code = code || null
+  return err
+}
+
 export async function callFn(name, body = {}) {
   const identity = getIdentity()
   if (!identity?.email) {
@@ -80,7 +87,8 @@ export async function callFn(name, body = {}) {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok || data?.ok === false) {
-    throw new Error(data?.error || `Request failed (${res.status})`)
+    const code = String(data?.error || '').trim() || null
+    throw createApiError(data?.error || `Request failed (${res.status})`, res.status, code)
   }
   return data
 }

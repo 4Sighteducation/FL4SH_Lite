@@ -11,9 +11,10 @@ const props = defineProps({
   sessionReviewed: { type: Number, required: true },
   activeStudyCard: { type: Object, default: null },
   revealAnswer: { type: Boolean, required: true },
+  links: { type: Object, required: true },
 })
 
-const emit = defineEmits(['back-to-subject', 'set-reveal-answer', 'apply-study-grade'])
+const emit = defineEmits(['back-to-subject', 'set-reveal-answer', 'apply-study-grade', 'store-click'])
 </script>
 
 <template>
@@ -49,6 +50,10 @@ const emit = defineEmits(['back-to-subject', 'set-reveal-answer', 'apply-study-g
     <p class="muted" v-if="!props.sessionDone">Due cards left: {{ props.dueCardsLength }} · Reviewed this session: {{ props.sessionReviewed }}</p>
     <div v-if="props.sessionDone" class="notice neon">
       Session complete. You reviewed {{ props.sessionReviewed }} cards.
+      <div class="toolbar" style="margin-top:8px;">
+        <a class="mini-btn active" :href="props.links.appStore" target="_blank" rel="noopener" @click="emit('store-click', 'app_store')">Get iOS App</a>
+        <a class="mini-btn active" :href="props.links.playStore" target="_blank" rel="noopener" @click="emit('store-click', 'play_store')">Get Android App</a>
+      </div>
     </div>
     <template v-else-if="props.activeStudyCard">
       <article class="study-card">
@@ -61,6 +66,12 @@ const emit = defineEmits(['back-to-subject', 'set-reveal-answer', 'apply-study-g
         </div>
       </article>
     </template>
-    <div v-else class="muted">No cards are due right now. Come back later or create more cards.</div>
+    <div v-else class="notice neon">
+      No cards are due right now. Come back later or create more cards.
+      <div class="toolbar" style="margin-top:8px;">
+        <a class="mini-btn active" :href="props.links.appStore" target="_blank" rel="noopener" @click="emit('store-click', 'app_store')">Try full FL4SH</a>
+        <a class="mini-btn active" :href="props.links.playStore" target="_blank" rel="noopener" @click="emit('store-click', 'play_store')">Open in mobile app</a>
+      </div>
+    </div>
   </section>
 </template>

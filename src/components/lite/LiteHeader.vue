@@ -4,6 +4,8 @@ const props = defineProps({
   limits: { type: Object, required: true },
   links: { type: Object, required: true },
 })
+
+const emit = defineEmits(['store-click', 'website-click'])
 </script>
 
 <template>
@@ -16,10 +18,10 @@ const props = defineProps({
       </div>
     </div>
     <div class="badge-row">
-      <a :href="props.links.appStore" target="_blank" rel="noopener" class="store-badge">
+      <a :href="props.links.appStore" target="_blank" rel="noopener" class="store-badge" @click="emit('store-click', 'app_store')">
         <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" />
       </a>
-      <a :href="props.links.playStore" target="_blank" rel="noopener" class="store-badge">
+      <a :href="props.links.playStore" target="_blank" rel="noopener" class="store-badge" @click="emit('store-click', 'play_store')">
         <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" />
       </a>
     </div>
@@ -27,6 +29,6 @@ const props = defineProps({
 
   <section class="notice neon">
     <strong>FL4SH Lite</strong> is limited to {{ props.limits.max_subjects }} subjects and {{ props.limits.max_cards_per_subject }} cards per subject.
-    For full mobile-native experience, visit <a :href="props.links.website" target="_blank" rel="noopener">fl4shcards.com</a>.
+    For full mobile-native experience, visit <a :href="props.links.website" target="_blank" rel="noopener" @click="emit('website-click', 'header_notice')">fl4shcards.com</a>.
   </section>
 </template>

@@ -29,3 +29,11 @@ export async function generateLiteCards(callFn, payload) {
 export async function deleteLiteCard(callFn, cardId) {
   return callFn('fl4sh-lite-delete-card', { card_id: cardId })
 }
+
+export async function trackLiteUpsellEvent(callFn, eventType, placement, payload = {}) {
+  return callFn('fl4sh-lite-upsell-event', {
+    event_type: eventType,
+    placement,
+    payload,
+  })
+}

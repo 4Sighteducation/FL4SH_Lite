@@ -21,8 +21,8 @@ const emit = defineEmits(['open-subject'])
         :style="{ borderColor: props.getSubjectColor(s.subject_key), boxShadow: `0 0 14px ${props.getSubjectColor(s.subject_key)}33` }"
       >
         <h3>{{ s.subject_name }}</h3>
-        <p>{{ s.exam_board }} · {{ s.qualification_type }}</p>
-        <small>{{ s.card_count || 0 }} saved cards</small>
+        <p class="subject-meta">{{ s.exam_board }} · {{ s.qualification_type }}</p>
+        <small class="subject-count">{{ s.card_count || 0 }} saved cards</small>
       </button>
     </div>
   </section>
