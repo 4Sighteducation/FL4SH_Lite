@@ -77,13 +77,21 @@ h2, h3, h4 { margin: 0 0 8px; }
 }
 .subject-item {
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
   align-items: center;
   border: 1px solid #304273;
   border-radius: 10px;
   background: #0d1734;
   padding: 8px;
+}
+.subject-item.picker {
+  text-align: left;
+  cursor: pointer;
+}
+.subject-item.picker.active {
+  border-color: #ff2a8f;
+  box-shadow: 0 0 10px rgba(255, 42, 143, 0.25);
 }
 .subject-item small { color: #9db0de; display: block; }
 
@@ -99,6 +107,39 @@ h2, h3, h4 { margin: 0 0 8px; }
 }
 .subject-card.active { border-color: #ff2a8f; box-shadow: 0 0 14px rgba(255, 42, 143, 0.3); }
 .subject-card small { display: block; margin-top: 4px; color: #d7e0ff; }
+.subject-color-row {
+  margin-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #b9c8ef;
+}
+.subject-color-input {
+  width: 42px;
+  height: 24px;
+  border-radius: 8px;
+  padding: 0;
+  margin: 0;
+}
+.subject-grid-main {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+.subject-main-card {
+  text-align: left;
+  border: 1px solid #4b60a1;
+  background: #111d42;
+  color: #e6eeff;
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+}
+.subject-main-card h3 { margin: 0; font-size: 1rem; }
+.subject-main-card p { margin: 6px 0; color: #c3d1f5; font-size: 0.86rem; }
+.subject-main-card small { color: #9cb2e4; }
 
 .btn {
   width: 100%;
@@ -122,6 +163,7 @@ h2, h3, h4 { margin: 0 0 8px; }
 
 .panel-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
 .toolbar { display: flex; gap: 8px; align-items: center; }
+.toolbar .btn { width: auto; }
 .mini-btn {
   border: 1px solid #4f63a0;
   background: #101a3a;
@@ -264,6 +306,113 @@ textarea, input, select {
   box-shadow: 0 0 12px rgba(255, 42, 143, 0.28);
   background: rgba(255, 42, 143, 0.22);
 }
+.topic-pill em {
+  margin-left: 6px;
+  font-style: normal;
+  color: #a9b9e5;
+}
+.modal-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.mini-chip {
+  border: 1px solid #4b62a1;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.74rem;
+  color: #d5e2ff;
+  background: #0f1a3c;
+}
+.mini-chip.due {
+  border-color: #2fbb78;
+  color: #d4ffe7;
+}
+.mini-chip.frozen {
+  border-color: #6f81b3;
+  color: #c9d4ef;
+}
+.flip-shell {
+  position: relative;
+  min-height: 210px;
+  perspective: 1200px;
+  margin-bottom: 10px;
+}
+.flip-face {
+  border: 1px solid #3f5390;
+  border-radius: 14px;
+  background: #101b3f;
+  padding: 14px;
+  min-height: 210px;
+  backface-visibility: hidden;
+  transition: transform .35s ease, opacity .25s ease;
+}
+.flip-face.front {
+  transform: rotateY(0deg);
+  opacity: 1;
+}
+.flip-face.back {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(180deg);
+  opacity: 0;
+}
+.flip-shell.flipped .flip-face.front {
+  transform: rotateY(180deg);
+  opacity: 0;
+}
+.flip-shell.flipped .flip-face.back {
+  transform: rotateY(360deg);
+  opacity: 1;
+}
+.mcq-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.mcq-option {
+  text-align: left;
+  border: 1px solid #4f66a7;
+  border-radius: 9px;
+  padding: 8px;
+  color: #e3ecff;
+  background: #101b3f;
+  cursor: pointer;
+}
+.mcq-option.active {
+  border-color: #ff2a8f;
+}
+.mcq-option.correct {
+  border-color: #2fb674;
+  background: rgba(47, 182, 116, 0.12);
+}
+.mcq-option.wrong {
+  border-color: #e36687;
+  background: rgba(227, 102, 135, 0.14);
+}
+.card-detail-grid {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 8px;
+}
+.card-detail-grid > div {
+  border: 1px solid #3e528f;
+  border-radius: 10px;
+  background: #0f1a3b;
+  padding: 8px;
+  display: grid;
+  gap: 3px;
+}
+.card-detail-grid strong {
+  font-size: 0.75rem;
+  color: #a7b8e1;
+}
+.card-detail-grid span {
+  font-size: 0.83rem;
+  color: #e3ecff;
+}
 .card {
   border: 1px solid #33487d;
   border-radius: 11px;
@@ -314,10 +463,16 @@ textarea, input, select {
   background: #101939;
   padding: 14px;
 }
+.mcq-options {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
 
 @media (max-width: 1040px) {
   .layout { grid-template-columns: 1fr; }
   .forms { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; align-items: flex-start; }
   .leitner-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
+  .card-detail-grid { grid-template-columns: 1fr; }
 }
