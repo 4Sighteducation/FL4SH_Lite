@@ -332,6 +332,8 @@ async function loadTopicTree() {
     const data = await getLiteTopicTree(callFn, state.selectedSubjectKey)
     topicTree.value = Array.isArray(data.topics) ? data.topics : []
   } catch (e) {
+    // Keep this in console so production debugging is possible.
+    console.error('[fl4sh-lite-topic-tree] load failed', e)
     state.topicTreeError = e.message || 'Could not load topic tree. Showing fallback topics.'
     const fallback = topicList.value.map((t) => ({ id: t, topic_name: t, topic_code: t, children: [], topic_level: 1, card_count: 0 }))
     topicTree.value = fallback

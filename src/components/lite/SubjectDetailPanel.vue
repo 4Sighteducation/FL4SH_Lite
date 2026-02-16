@@ -1,4 +1,6 @@
 <script setup>
+import { computed, ref } from 'vue'
+
 const props = defineProps({
   visible: { type: Boolean, required: true },
   selectedSubject: { type: Object, default: null },
@@ -24,6 +26,13 @@ const emit = defineEmits([
   'toggle-topic-row',
   'open-create-flow',
 ])
+
+const topicSearch = ref('')
+const filteredTopicRows = computed(() => {
+  const query = topicSearch.value.trim().toLowerCase()
+  if (!query) return props.topicRows
+  return props.topicRows.filter((row) => String(row.label || '').toLowerCase().includes(query))
+})
 </script>
 
 <template>
@@ -51,15 +60,27 @@ const emit = defineEmits([
         <button
           class="mini-btn"
           v-if="props.hasActiveFilters"
-          @click="
-            emit('set-active-box-filter', 0);
-            emit('set-active-topic-filter', '')
-          "
+          @click="emit('set-active-topic-filter', '')"
         >
           Reset filters
         </button>
       </div>
       <small class="muted">Select a topic to open its cards in the modal viewer.</small>
+      <div class="modal-search-row" style="margin-top: 8px;">
+        <input
+          v-model="topicSearch"
+          class="subject-search-input"
+          type="search"
+          placeholder="Search topics..."
+        />
+        <button
+          v-if="topicSearch"
+          class="mini-btn ghost"
+          @click="topicSearch = ''"
+        >
+          Clear
+        </button>
+      </div>
       <div v-if="props.topicTreeLoading" class="muted">Loading topic tree...</div>
       <div v-else-if="props.topicTreeError" class="muted">{{ props.topicTreeError }}</div>
       <div class="topic-tree-list">
@@ -68,7 +89,7 @@ const emit = defineEmits([
           <strong>{{ props.cards.length }}</strong>
         </button>
         <button
-          v-for="row in props.topicRows"
+          v-for="row in filteredTopicRows"
           :key="row.id"
           class="topic-row"
           :class="{ active: props.activeTopicFilter === row.topic_code }"

@@ -81,8 +81,56 @@ function parseSubjectKey(subjectKey: string) {
   return {
     examBoard: String(parts[0] || "").trim(),
     qualification: String(parts[1] || "").trim(),
-    subjectCode: String(parts[2] || "").trim(),
+    subjectCode: String(parts[2] || parts[parts.length - 1] || "").trim(),
   };
+}
+
+async function resolveSubjectRow(curriculumDb: any, subjectKey: string, userId: string) {
+  const { examBoard, qualification, subjectCode } = parseSubjectKey(subjectKey);
+  if (subjectCode) {
+    const { data: byCode } = await curriculumDb
+      .from("exam_board_subjects")
+      .select("id,subject_code")
+      .eq("subject_code", subjectCode)
+      .limit(1)
+      .maybeSingle();
+    if (byCode?.id) return byCode;
+  }
+
+  const { data: selectedSubject } = await curriculumDb
+    .from("fl4sh_lite_user_subjects")
+    .select("subject_name,exam_board,qualification_type")
+    .eq("user_id", userId)
+    .eq("subject_key", subjectKey)
+    .maybeSingle();
+
+  const subjectName = String(selectedSubject?.subject_name || "").trim();
+  if (!subjectName) return null;
+  const boardMatch = String(selectedSubject?.exam_board || examBoard || "").trim().toUpperCase();
+  const qualificationMatch = String(selectedSubject?.qualification_type || qualification || "").trim().toUpperCase();
+
+  const { data: candidates } = await curriculumDb
+    .from("exam_board_subjects")
+    .select(`
+      id,
+      subject_code,
+      subject_name,
+      exam_boards(code, full_name),
+      qualification_types(code)
+    `)
+    .ilike("subject_name", subjectName)
+    .limit(50);
+
+  const best = (candidates || []).find((row: any) => {
+    const rowBoard = String(row?.exam_boards?.code || row?.exam_boards?.full_name || "").trim().toUpperCase();
+    const rowQualification = String(row?.qualification_types?.code || "").trim().toUpperCase();
+    const boardOk = !boardMatch || !rowBoard || rowBoard === boardMatch;
+    const qualificationOk =
+      !qualificationMatch || !rowQualification || rowQualification === qualificationMatch || rowQualification.includes(qualificationMatch);
+    return boardOk && qualificationOk;
+  });
+
+  return best || (candidates || [])[0] || null;
 }
 
 function buildTree(topics: any[], countsByTopic: Map<string, number>) {
@@ -133,22 +181,8 @@ serve(async (req: Request) => {
     if (!subjectKey) return json(400, { ok: false, error: "Missing subject_key" });
 
     const appDb = getAppDbClient();
-    const curriculumDb = getCurriculumClient();
-    if (!curriculumDb) return json(500, { ok: false, error: "Missing curriculum DB secrets" });
+    const curriculumDb = getCurriculumClient() || appDb;
     const user = await upsertLiteUser(appDb, identity);
-
-    const { subjectCode } = parseSubjectKey(subjectKey);
-    if (!subjectCode) return json(200, { ok: true, topics: [] });
-
-    const { data: subjectRow, error: subjectErr } = await curriculumDb
-      .from("exam_board_subjects")
-      .select("id,subject_code")
-      .eq("subject_code", subjectCode)
-      .limit(1)
-      .maybeSingle();
-
-    if (subjectErr) return json(500, { ok: false, error: subjectErr.message });
-    if (!subjectRow?.id) return json(200, { ok: true, topics: [] });
 
     const { data: cards, error: cardsErr } = await appDb
       .from("fl4sh_lite_cards")
@@ -163,6 +197,20 @@ serve(async (req: Request) => {
       countsByTopic.set(key, (countsByTopic.get(key) || 0) + 1);
     }
 
+    const subjectRow = await resolveSubjectRow(curriculumDb, subjectKey, user.id);
+    if (!subjectRow?.id) {
+      const fallback = Array.from(countsByTopic.keys()).sort().map((topicName, index) => ({
+        id: `fallback-${index + 1}`,
+        topic_name: topicName,
+        topic_code: topicName,
+        parent_topic_id: null,
+        topic_level: 1,
+        card_count: countsByTopic.get(topicName) || 0,
+        children: [],
+      }));
+      return json(200, { ok: true, topics: fallback, fallback: true });
+    }
+
     const { data: topics, error: topicErr } = await curriculumDb
       .from("curriculum_topics")
       .select("id,parent_topic_id,topic_name,topic_level")
@@ -170,7 +218,18 @@ serve(async (req: Request) => {
       .order("topic_level", { ascending: true })
       .order("topic_name", { ascending: true });
 
-    if (topicErr) return json(500, { ok: false, error: topicErr.message });
+    if (topicErr) {
+      const fallback = Array.from(countsByTopic.keys()).sort().map((topicName, index) => ({
+        id: `fallback-${index + 1}`,
+        topic_name: topicName,
+        topic_code: topicName,
+        parent_topic_id: null,
+        topic_level: 1,
+        card_count: countsByTopic.get(topicName) || 0,
+        children: [],
+      }));
+      return json(200, { ok: true, topics: fallback, fallback: true, warning: topicErr.message });
+    }
     const tree = buildTree(topics || [], countsByTopic);
     return json(200, { ok: true, topics: tree });
   } catch (e: any) {

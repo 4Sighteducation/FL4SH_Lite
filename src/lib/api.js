@@ -80,11 +80,17 @@ export async function callFn(name, body = {}) {
   }
   if (BRIDGE_SECRET) headers['x-fl4sh-lite-secret'] = BRIDGE_SECRET
 
-  const res = await fetch(getFnUrl(name), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ ...identity, ...body }),
-  })
+  let res
+  try {
+    res = await fetch(getFnUrl(name), {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ ...identity, ...body }),
+    })
+  } catch (networkErr) {
+    const message = networkErr instanceof Error ? networkErr.message : 'Network request failed'
+    throw createApiError(`Network error calling ${name}: ${message}`, null, 'NETWORK_ERROR')
+  }
   const data = await res.json().catch(() => ({}))
   if (!res.ok || data?.ok === false) {
     const code = String(data?.error || '').trim() || null
