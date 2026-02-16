@@ -31,6 +31,9 @@ const manualFront = ref('')
 const manualBack = ref('')
 const activeTopicFilter = ref('')
 const subjectSearch = ref('')
+const activeBoxFilter = ref(0)
+const pulseBox = ref(0)
+const movingCardText = ref('')
 
 const selectedSubject = computed(() =>
   state.selectedSubjects.find((s) => s.subject_key === state.selectedSubjectKey) || null
@@ -59,8 +62,11 @@ const topicList = computed(() => {
   return [...set]
 })
 const filteredCards = computed(() => {
-  if (!activeTopicFilter.value) return state.cards
-  return state.cards.filter((c) => String(c.topic_code || '') === activeTopicFilter.value)
+  return state.cards.filter((c) => {
+    const topicOk = !activeTopicFilter.value || String(c.topic_code || '') === activeTopicFilter.value
+    const boxOk = !activeBoxFilter.value || cardBox(c) === activeBoxFilter.value
+    return topicOk && boxOk
+  })
 })
 const filteredAvailableSubjects = computed(() => {
   const q = subjectSearch.value.trim().toLowerCase()
@@ -71,6 +77,35 @@ const filteredAvailableSubjects = computed(() => {
     String(s.qualification_type || '').toLowerCase().includes(q)
   )
 })
+
+const boxConfig = [
+  { box: 1, title: 'New', interval: '1d' },
+  { box: 2, title: 'Warm', interval: '2d' },
+  { box: 3, title: 'Solid', interval: '4d' },
+  { box: 4, title: 'Strong', interval: '7d' },
+  { box: 5, title: 'Mastered', interval: '21d' },
+]
+
+function cardBox(card) {
+  return Number(progressionMap.value[card.id]?.box || 1)
+}
+
+function shortLine(text, max = 44) {
+  const t = String(text || '').trim()
+  if (!t) return ''
+  return t.length > max ? `${t.slice(0, max - 1)}...` : t
+}
+
+const boxStats = computed(() =>
+  boxConfig.map((b) => {
+    const cards = state.cards.filter((c) => cardBox(c) === b.box)
+    return {
+      ...b,
+      count: cards.length,
+      preview: cards.slice(0, 3),
+    }
+  })
+)
 
 function neonUpsell(title, message) {
   state.upsellTitle = title
@@ -118,6 +153,12 @@ function applyStudyGrade(correct) {
     lastReviewedAt: new Date().toISOString(),
     nextReviewAt,
   }
+  movingCardText.value = shortLine(card.front_text, 36)
+  pulseBox.value = nextBox
+  window.setTimeout(() => {
+    pulseBox.value = 0
+    movingCardText.value = ''
+  }, 900)
   saveProgression()
   state.revealAnswer = false
   state.studyIndex += 1
@@ -350,6 +391,32 @@ onMounted(loadContext)
               <button class="btn ghost" @click="view = 'home'">Back</button>
             </div>
           </div>
+          <div class="leitner-wrap">
+            <div class="leitner-head">
+              <h3>Leitner Boxes</h3>
+              <button class="mini-btn" :class="{ active: !activeBoxFilter }" @click="activeBoxFilter = 0">All cards</button>
+            </div>
+            <div class="leitner-grid">
+              <article
+                v-for="b in boxStats"
+                :key="b.box"
+                class="leitner-box"
+                :class="{ active: activeBoxFilter === b.box, pulse: pulseBox === b.box }"
+                @click="activeBoxFilter = activeBoxFilter === b.box ? 0 : b.box"
+              >
+                <div class="box-label">
+                  <strong>Box {{ b.box }}</strong>
+                  <span>{{ b.title }} · {{ b.interval }}</span>
+                </div>
+                <div class="box-count">{{ b.count }} card{{ b.count === 1 ? '' : 's' }}</div>
+                <div class="box-preview">
+                  <small v-for="p in b.preview" :key="p.id">{{ shortLine(p.front_text) }}</small>
+                  <small v-if="!b.preview.length" class="muted">No cards yet</small>
+                </div>
+                <div v-if="pulseBox === b.box && movingCardText" class="box-fly-chip">+ {{ movingCardText }}</div>
+              </article>
+            </div>
+          </div>
           <div class="muted">Saved cards for this subject: {{ state.cards.length }}</div>
           <div class="topic-strip" v-if="topicList.length">
             <button class="topic-pill" :class="{ active: !activeTopicFilter }" @click="activeTopicFilter = ''">All topics</button>
@@ -406,6 +473,30 @@ onMounted(loadContext)
         <div class="panel-head">
           <h2>Study Mode · {{ selectedSubject?.subject_name }}</h2>
           <button class="btn ghost" @click="view = 'subject'">Back to cards</button>
+        </div>
+        <div class="leitner-wrap compact">
+          <div class="leitner-head">
+            <h3>Leitner Boxes (live)</h3>
+          </div>
+          <div class="leitner-grid">
+            <article
+              v-for="b in boxStats"
+              :key="`study-${b.box}`"
+              class="leitner-box"
+              :class="{ pulse: pulseBox === b.box }"
+            >
+              <div class="box-label">
+                <strong>Box {{ b.box }}</strong>
+                <span>{{ b.interval }}</span>
+              </div>
+              <div class="box-count">{{ b.count }} card{{ b.count === 1 ? '' : 's' }}</div>
+              <div class="box-preview">
+                <small v-for="p in b.preview" :key="p.id">{{ shortLine(p.front_text, 30) }}</small>
+                <small v-if="!b.preview.length" class="muted">No cards</small>
+              </div>
+              <div v-if="pulseBox === b.box && movingCardText" class="box-fly-chip">+ {{ movingCardText }}</div>
+            </article>
+          </div>
         </div>
         <p class="muted" v-if="!state.sessionDone">Due cards: {{ dueCards.length }} · Card {{ Math.min(state.studyIndex + 1, dueCards.length) }} / {{ dueCards.length }}</p>
         <div v-if="state.sessionDone" class="notice neon">
