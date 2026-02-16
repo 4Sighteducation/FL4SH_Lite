@@ -3,6 +3,11 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 const BRIDGE_SECRET = import.meta.env.VITE_FL4SH_LITE_BRIDGE_SECRET || ''
 const ENABLE_LOCAL_MOCK = String(import.meta.env.VITE_ENABLE_LOCAL_MOCK || 'false') === 'true'
 
+export const LITE_LIMITS = {
+  max_subjects: 2,
+  max_cards_per_subject: 20,
+}
+
 export const LINKS = {
   appStore: 'https://apps.apple.com/in/app/fl4sh-study-smarter/id6747457678',
   playStore: 'https://play.google.com/store/apps/details?id=com.foursighteducation.flash&pcampaignid=web_share',

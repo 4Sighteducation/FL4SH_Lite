@@ -2,6 +2,8 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 
+const MAX_SUBJECTS = 2;
+
 type SubjectSelection = {
   subject_key: string;
   subject_name?: string | null;
@@ -101,7 +103,7 @@ serve(async (req: Request) => {
       }))
       .filter((s) => s.subject_key);
 
-    if (subjects.length > 2) {
+    if (subjects.length > MAX_SUBJECTS) {
       return json(400, { ok: false, error: "SUBJECT_LIMIT_REACHED" });
     }
 

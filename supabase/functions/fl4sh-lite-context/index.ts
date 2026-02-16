@@ -2,6 +2,11 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.8";
 
+const LITE_LIMITS = {
+  max_subjects: 2,
+  max_cards_per_subject: 20,
+} as const;
+
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -196,10 +201,7 @@ serve(async (req: Request) => {
         school_name: identity.schoolName,
         qualification_level: identity.qualificationLevel,
       },
-      limits: {
-        max_subjects: 2,
-        max_cards_per_subject: 10,
-      },
+      limits: LITE_LIMITS,
       selected_subjects: selected || [],
       available_subjects: catalog,
       catalog_warning: catalogWarning,

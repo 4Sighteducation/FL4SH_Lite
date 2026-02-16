@@ -39,6 +39,7 @@ For local testing outside Knack, keep `VITE_ENABLE_LOCAL_MOCK=true`.
 ## App behavior in this repo
 
 - Desktop/tablet-first UI for subject selection + flashcards
+- Hard limits: 2 subjects and 20 cards per subject
 - Manual card creation via `fl4sh-lite-create-card`
 - AI generation via `fl4sh-lite-generate-cards` (reusing FL4SH generator endpoint for prompt parity)
 - Strong upsell CTAs to:

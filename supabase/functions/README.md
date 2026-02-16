@@ -13,7 +13,7 @@ All user data writes happen in this project (`fl4sh_lite_*` tables), while curri
 - `fl4sh-lite-select-subjects`
   - Replaces selected subjects for user (max 2 enforced by DB trigger)
 - `fl4sh-lite-create-card`
-  - Creates a card (max 10 per subject enforced by DB trigger)
+  - Creates a card (max 20 per subject enforced by DB trigger)
 - `fl4sh-lite-generate-cards`
   - Uses existing FL4SH generator endpoint for prompt parity
   - Inserts generated cards into `fl4sh_lite_cards` (limits still enforced by DB)

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { LINKS, callFn } from './lib/api'
+import { LINKS, LITE_LIMITS, callFn } from './lib/api'
 
 const view = ref('home') // home | subject | study
 const state = reactive({
@@ -8,7 +8,7 @@ const state = reactive({
   busy: false,
   error: '',
   user: null,
-  limits: { max_subjects: 2, max_cards_per_subject: 10 },
+  limits: { ...LITE_LIMITS },
   availableSubjects: [],
   selectedSubjects: [],
   selectedSubjectKey: '',
