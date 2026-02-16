@@ -27,6 +27,25 @@ const emit = defineEmits(['back-to-subject', 'begin-session', 'set-reveal-answer
 const selectedOption = ref('')
 const selectedCorrect = ref(null)
 const activeMcq = computed(() => props.parseMcq(props.activeStudyCard || {}))
+const isFlipped = ref(false)
+const isBusyGrading = ref(false)
+const showSelfGrade = ref(false)
+const outcome = ref('') // correct | incorrect | ''
+const showExplanation = ref(false)
+
+const isMcqCard = computed(() => activeMcq.value.options.length > 0)
+const cardTypeLabel = computed(() => {
+  if (isMcqCard.value) return 'Multiple choice'
+  const raw = String(props.activeStudyCard?.card_type || '').toLowerCase()
+  if (raw.includes('essay')) return 'Essay'
+  return 'Short answer'
+})
+const backBadgeLabel = computed(() => {
+  if (isMcqCard.value) return 'Explanation'
+  const raw = String(props.activeStudyCard?.card_type || '').toLowerCase()
+  if (raw.includes('essay')) return 'Model answer'
+  return 'Answer'
+})
 const boxJourney = computed(() => {
   const colors = ['#56d2ff', '#8b8cf9', '#ff55b8', '#ffa944', '#27e48f']
   return (props.boxStats || []).map((box, index) => ({
@@ -40,19 +59,61 @@ watch(
   () => {
     selectedOption.value = ''
     selectedCorrect.value = null
+    isFlipped.value = false
+    showSelfGrade.value = false
+    showExplanation.value = false
+    outcome.value = ''
+    isBusyGrading.value = false
+    emit('set-reveal-answer', false)
   }
 )
 
 function chooseOption(key) {
-  if (selectedOption.value) return
+  if (selectedOption.value || isBusyGrading.value) return
   selectedOption.value = key
   const correct = String(activeMcq.value?.correct || '').toUpperCase()
   selectedCorrect.value = correct ? key === correct : null
+  showExplanation.value = true
+
+  // MCQ auto-marks and advances.
+  const isCorrect = selectedCorrect.value === true
+  outcome.value = isCorrect ? 'correct' : 'incorrect'
+  isBusyGrading.value = true
+  window.setTimeout(() => {
+    emit('apply-study-grade', isCorrect)
+    // reset UI quickly; next card watcher will run too
+    isBusyGrading.value = false
+    outcome.value = ''
+    selectedOption.value = ''
+    selectedCorrect.value = null
+    showExplanation.value = false
+  }, 700)
 }
 
-function submitSelectedOption() {
-  if (!selectedOption.value) return
-  emit('apply-study-grade', selectedCorrect.value === true)
+function toggleFlip() {
+  if (isBusyGrading.value || isMcqCard.value) return
+  isFlipped.value = !isFlipped.value
+  emit('set-reveal-answer', isFlipped.value)
+  // When the answer is visible, prompt for self-grade (in-modal, not on page footer).
+  if (isFlipped.value) showSelfGrade.value = true
+}
+
+function closeSelfGrade() {
+  showSelfGrade.value = false
+}
+
+function selfGrade(correct) {
+  if (isBusyGrading.value) return
+  outcome.value = correct ? 'correct' : 'incorrect'
+  isBusyGrading.value = true
+  showSelfGrade.value = false
+  window.setTimeout(() => {
+    emit('apply-study-grade', Boolean(correct))
+    isBusyGrading.value = false
+    outcome.value = ''
+    isFlipped.value = false
+    emit('set-reveal-answer', false)
+  }, 700)
 }
 </script>
 
@@ -112,52 +173,109 @@ function submitSelectedOption() {
       </div>
     </template>
     <template v-else-if="props.activeStudyCard">
-      <div class="study-progress-shell">
-        <div class="study-progress-head">
-          <small>Daily Review</small>
-          <small>{{ props.sessionReviewed }}/{{ props.sessionTotalDue || props.sessionReviewed }}</small>
-        </div>
-        <div class="study-progress-track">
-          <div class="study-progress-fill" :style="{ width: `${props.progressPercent}%` }"></div>
+      <!-- Keep Study page structure; run the review experience in a modal overlay -->
+      <div class="modal" v-if="props.sessionStarted">
+        <div class="modal-card neon study-modal-card">
+          <div class="panel-head">
+            <div>
+              <h3>{{ props.selectedSubject?.subject_name }}</h3>
+              <small class="muted">Daily Review · {{ props.sessionReviewed }}/{{ props.sessionTotalDue || props.sessionReviewed }}</small>
+            </div>
+            <button class="mini-btn" @click="emit('back-to-subject')">Close</button>
+          </div>
+
+          <div class="study-progress-shell">
+            <div class="study-progress-head">
+              <small>Session progress</small>
+              <small>{{ props.sessionReviewed }}/{{ props.sessionTotalDue || props.sessionReviewed }}</small>
+            </div>
+            <div class="study-progress-track">
+              <div class="study-progress-fill" :style="{ width: `${props.progressPercent}%` }"></div>
+            </div>
+          </div>
+
+          <!-- MCQ: no flip, inline reveal -->
+          <div v-if="isMcqCard" class="mcq-card-stage">
+            <span class="card-type-badge">{{ cardTypeLabel }}</span>
+            <div class="mcq-card-body">
+              <div class="mcq-question">{{ props.activeStudyCard.front_text }}</div>
+              <div class="mcq-options">
+                <button
+                  v-for="o in activeMcq.options"
+                  :key="o.key"
+                  class="mcq-option"
+                  :class="{
+                    selected: selectedOption === o.key,
+                    correct: selectedOption && o.key === activeMcq.correct,
+                    wrong: selectedOption === o.key && activeMcq.correct && o.key !== activeMcq.correct,
+                  }"
+                  :disabled="Boolean(selectedOption) || isBusyGrading"
+                  @click="chooseOption(o.key)"
+                >
+                  <span class="opt-key">{{ o.key }}</span>
+                  <span class="opt-text">{{ o.text }}</span>
+                </button>
+              </div>
+            </div>
+            <div class="mcq-answer-panel" :class="{ visible: showExplanation }">
+              <div class="mcq-answer-divider"></div>
+              <div class="mcq-answer-content">
+                {{ activeMcq.info || 'Detailed answer not available for this card.' }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Short answer / Essay: 3D flip -->
+          <div v-else class="flip-container">
+            <div class="flip-card" :class="{ flipped: isFlipped }" @click="toggleFlip">
+              <div class="flip-face flip-front">
+                <span class="card-type-badge">{{ cardTypeLabel }}</span>
+                <div class="face-body">
+                  <span class="face-side-label front-label">Question</span>
+                  <div class="face-question">{{ props.activeStudyCard.front_text }}</div>
+                </div>
+                <div class="flip-hint">Tap anywhere to flip</div>
+              </div>
+              <div class="flip-face flip-back" :class="{ essay: String(props.activeStudyCard?.card_type || '').toLowerCase().includes('essay') }">
+                <span class="card-type-badge" style="color: var(--success)">{{ backBadgeLabel }}</span>
+                <div class="face-body">
+                  <span class="face-side-label back-label">{{ backBadgeLabel }}</span>
+                  <div class="face-answer">{{ props.activeStudyCard.back_text }}</div>
+                </div>
+                <div class="flip-hint">Tap to flip back</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Success/failure overlay (brief) -->
+          <div class="study-outcome" v-if="outcome">
+            <div class="study-outcome-card" :class="outcome">
+              <strong v-if="outcome === 'correct'">✓ Correct</strong>
+              <strong v-else>✕ Incorrect</strong>
+              <small v-if="outcome === 'correct'">Moving forward</small>
+              <small v-else>Back to Box 1</small>
+            </div>
+          </div>
+
+          <!-- Self-grade modal for non-MCQ -->
+          <div class="study-grade-modal" v-if="showSelfGrade && !isMcqCard">
+            <div class="study-grade-card">
+              <h4>How did you do?</h4>
+              <p class="muted">Mark yourself and we’ll move to the next card automatically.</p>
+              <div class="grade-buttons">
+                <button class="grade-btn incorrect" @click="selfGrade(false)">✕ Incorrect<span class="grade-label">Back to Box 1</span></button>
+                <button class="grade-btn got-it" @click="selfGrade(true)">✓ Got it<span class="grade-label">Move forward</span></button>
+              </div>
+              <div class="toolbar" style="justify-content:flex-end;margin-top:10px;">
+                <button class="mini-btn ghost" @click="closeSelfGrade">Not yet</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-      <article class="review-shell">
-        <header class="review-head">
-          <span>{{ props.activeStudyCard.topic_code || 'General' }}</span>
-          <span>Box {{ props.activeStudyCard.box_number || 1 }}</span>
-        </header>
-        <div class="review-question">
-          {{ props.activeStudyCard.front_text }}
-        </div>
-        <button class="btn ghost" v-if="!props.revealAnswer" @click="emit('set-reveal-answer', true)">Reveal answer</button>
-        <template v-else>
-          <div v-if="activeMcq.options.length" class="mcq-grid">
-            <button
-              v-for="o in activeMcq.options"
-              :key="o.key"
-              class="mcq-option"
-              :class="{
-                active: selectedOption === o.key,
-                correct: selectedOption && o.key === activeMcq.correct,
-                wrong: selectedOption === o.key && activeMcq.correct && o.key !== activeMcq.correct
-              }"
-              @click="chooseOption(o.key)"
-            >
-              {{ o.key }}. {{ o.text }}
-            </button>
-          </div>
-          <div v-else class="review-answer">{{ props.activeStudyCard.back_text }}</div>
-          <div class="row" v-if="activeMcq.options.length">
-            <button class="btn hot" :disabled="!selectedOption" @click="submitSelectedOption">Submit answer</button>
-          </div>
-          <div class="row" v-else>
-            <button class="btn ghost" @click="emit('apply-study-grade', false)">Not quite</button>
-            <button class="btn neon-btn" @click="emit('apply-study-grade', true)">Got it</button>
-          </div>
-        </template>
-      </article>
-      <div class="review-feedback success" v-if="props.lastOutcome === 'correct'">Nice one — moved forward.</div>
-      <div class="review-feedback danger" v-if="props.lastOutcome === 'incorrect'">Not quite — back to review sooner.</div>
+
+      <!-- If session hasn't started, this panel branch shouldn't show; safeguard only. -->
+      <div v-else class="notice neon">Click “Start Review” to begin.</div>
     </template>
     <div v-else class="notice neon">
       No cards are due right now. Come back later or create more cards.
