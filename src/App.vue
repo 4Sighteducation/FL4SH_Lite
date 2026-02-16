@@ -65,6 +65,7 @@ const {
   activeStudyCard,
   topicList,
   filteredCards,
+  filteredSelectedSubjects,
   filteredModalSubjects,
   boxStats,
   topicRows,
@@ -91,6 +92,7 @@ function setSubjectColorFromSidebar(payload) {
 }
 const dueCountInSubject = computed(() => state.cards.filter((card) => isCardDue(card)).length)
 const masteredCountInSubject = computed(() => state.cards.filter((card) => Number(card?.box_number || 1) === 5).length)
+const hasActiveFilters = computed(() => Boolean(activeTopicFilter.value || activeBoxFilter.value))
 const studyProgressPercent = computed(() => {
   const total = Number(state.sessionTotalDue || 0)
   if (total <= 0) return state.sessionDone ? 100 : 0
@@ -427,6 +429,13 @@ async function generateCards() {
   }
 }
 
+async function requestDeleteCard(cardId) {
+  if (!cardId || state.busy) return
+  const confirmed = window.confirm('Delete this card permanently from Lite?')
+  if (!confirmed) return
+  await deleteCard(cardId)
+}
+
 async function deleteCard(cardId) {
   state.busy = true
   try {
@@ -468,20 +477,28 @@ onMounted(loadContext)
 
     <main class="layout" v-if="!state.loading">
       <SubjectSidebar
-        :selected-subjects="state.selectedSubjects"
+        :selected-subjects="filteredSelectedSubjects"
+        :all-selected-subjects-length="state.selectedSubjects.length"
         :selected-subject-key="state.selectedSubjectKey"
         :limits="state.limits"
+        :subject-search="subjectSearch"
         :get-subject-color="getSubjectColor"
         @manage-subjects="openSubjectModal"
         @open-subject="openSubject"
         @set-subject-color="setSubjectColorFromSidebar"
+        @update:subject-search="subjectSearch = $event"
       />
 
       <SubjectHomePanel
         :visible="view === 'home'"
-        :selected-subjects="state.selectedSubjects"
+        :selected-subjects="filteredSelectedSubjects"
+        :all-selected-subjects-length="state.selectedSubjects.length"
+        :subject-search="subjectSearch"
+        :limits="state.limits"
         :get-subject-color="getSubjectColor"
         @open-subject="openSubject"
+        @update:subject-search="subjectSearch = $event"
+        @manage-subjects="openSubjectModal"
       />
 
       <SubjectDetailPanel
@@ -511,6 +528,7 @@ onMounted(loadContext)
         :filtered-cards="filteredCards"
         :due-count="dueCountInSubject"
         :mastered-count="masteredCountInSubject"
+        :has-active-filters="hasActiveFilters"
         @start-study="startStudy"
         @back-home="view = 'home'"
         @set-active-box-filter="activeBoxFilter = $event"
@@ -525,7 +543,7 @@ onMounted(loadContext)
         @add-manual-card="addManualCard"
         @generate-cards="generateCards"
         @open-card-modal="openCardModal"
-        @delete-card="deleteCard"
+        @delete-card="requestDeleteCard"
       />
 
       <StudyPanel

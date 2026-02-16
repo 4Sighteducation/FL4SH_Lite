@@ -71,6 +71,16 @@ export function useLiteComputed({
     )
   })
 
+  const filteredSelectedSubjects = computed(() => {
+    const q = subjectSearch.value.trim().toLowerCase()
+    if (!q) return state.selectedSubjects
+    return state.selectedSubjects.filter((s) =>
+      String(s.subject_name || '').toLowerCase().includes(q) ||
+      String(s.exam_board || '').toLowerCase().includes(q) ||
+      String(s.qualification_type || '').toLowerCase().includes(q)
+    )
+  })
+
   const filteredModalSubjects = computed(() => {
     const q = modalSearch.value.trim().toLowerCase()
     const choice = examLevelChoices.find((x) => x.label === modalLevel.value)
@@ -106,6 +116,7 @@ export function useLiteComputed({
     topicList,
     filteredCards,
     filteredAvailableSubjects,
+    filteredSelectedSubjects,
     filteredModalSubjects,
     boxStats,
     topicRows,

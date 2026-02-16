@@ -26,6 +26,7 @@ const props = defineProps({
   filteredCards: { type: Array, required: true },
   dueCount: { type: Number, required: true },
   masteredCount: { type: Number, required: true },
+  hasActiveFilters: { type: Boolean, required: true },
 })
 
 const emit = defineEmits([
@@ -71,7 +72,7 @@ function onAiCountInput(event) {
     <div class="panel-head">
       <h2>{{ props.selectedSubject?.subject_name || 'Subject' }}</h2>
       <div class="toolbar">
-        <button class="btn" @click="emit('start-study')" :disabled="props.cards.length === 0">Study Mode</button>
+        <button class="btn" @click="emit('start-study')" :disabled="props.dueCount === 0">Study Mode ({{ props.dueCount }})</button>
         <button class="btn ghost" @click="emit('back-home')">Back</button>
       </div>
     </div>
@@ -84,7 +85,19 @@ function onAiCountInput(event) {
     <div class="leitner-wrap">
       <div class="leitner-head">
         <h3>Leitner Boxes</h3>
-        <button class="mini-btn" :class="{ active: !props.activeBoxFilter }" @click="emit('set-active-box-filter', 0)">All cards</button>
+        <div class="toolbar">
+          <button class="mini-btn" :class="{ active: !props.activeBoxFilter }" @click="emit('set-active-box-filter', 0)">All cards</button>
+          <button
+            class="mini-btn"
+            v-if="props.hasActiveFilters"
+            @click="
+              emit('set-active-box-filter', 0);
+              emit('set-active-topic-filter', '')
+            "
+          >
+            Reset filters
+          </button>
+        </div>
       </div>
       <div class="leitner-grid">
         <article
@@ -164,7 +177,9 @@ function onAiCountInput(event) {
           <button @click.stop="emit('delete-card', c.id)" :disabled="props.busy">Delete</button>
         </div>
       </article>
-      <div v-if="props.filteredCards.length === 0" class="muted">No saved cards for this filter yet.</div>
+      <div v-if="props.cards.length > 0 && props.filteredCards.length === 0" class="notice neon">
+        No cards match this topic/box filter. Reset filters to see all cards.
+      </div>
     </div>
   </section>
 </template>

@@ -1,18 +1,23 @@
 <script setup>
 const props = defineProps({
   selectedSubjects: { type: Array, required: true },
+  allSelectedSubjectsLength: { type: Number, required: true },
   selectedSubjectKey: { type: String, required: true },
   limits: { type: Object, required: true },
+  subjectSearch: { type: String, required: true },
   getSubjectColor: { type: Function, required: true },
 })
 
-const emit = defineEmits(['manage-subjects', 'open-subject', 'set-subject-color'])
+const emit = defineEmits(['manage-subjects', 'open-subject', 'set-subject-color', 'update:subject-search'])
 
 function onColorInput(subjectKey, event) {
   emit('set-subject-color', {
     subjectKey,
     color: event?.target?.value || '#7c4dff',
   })
+}
+function onSearchInput(event) {
+  emit('update:subject-search', event?.target?.value || '')
 }
 </script>
 
@@ -23,6 +28,12 @@ function onColorInput(subjectKey, event) {
       <button class="mini-btn active" @click="emit('manage-subjects')">Manage</button>
     </div>
     <p class="muted">Choose up to {{ props.limits.max_subjects }} subjects in Lite.</p>
+    <input
+      class="subject-search-input"
+      :value="props.subjectSearch"
+      @input="onSearchInput"
+      placeholder="Search selected subjects..."
+    />
     <div class="subject-cards">
       <button
         v-for="s in props.selectedSubjects"
@@ -45,7 +56,10 @@ function onColorInput(subjectKey, event) {
           />
         </label>
       </button>
-      <div v-if="!props.selectedSubjects.length" class="muted">No subjects selected yet.</div>
+      <div v-if="props.allSelectedSubjectsLength > 0 && !props.selectedSubjects.length" class="muted">
+        No selected subjects match this search.
+      </div>
+      <div v-if="props.allSelectedSubjectsLength === 0" class="muted">No subjects selected yet.</div>
     </div>
   </aside>
 </template>

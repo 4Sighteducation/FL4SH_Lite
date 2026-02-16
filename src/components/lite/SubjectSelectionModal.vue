@@ -1,4 +1,6 @@
 <script setup>
+import { computed } from 'vue'
+
 const props = defineProps({
   visible: { type: Boolean, required: true },
   examLevelChoices: { type: Array, required: true },
@@ -26,11 +28,24 @@ function onLevelChange(event) {
 function onSearchInput(event) {
   emit('update:modalSearch', event?.target?.value || '')
 }
+function clearSearch() {
+  emit('update:modalSearch', '')
+}
 
 function isSubjectLocked(subjectKey) {
   if (props.subjectDraft.includes(subjectKey)) return false
   return props.subjectDraft.length >= props.maxSubjects
 }
+const sortedModalSubjects = computed(() => {
+  return [...props.filteredModalSubjects].sort((a, b) => {
+    const aSelected = props.subjectDraft.includes(a.subject_key) ? 1 : 0
+    const bSelected = props.subjectDraft.includes(b.subject_key) ? 1 : 0
+    if (aSelected !== bSelected) return bSelected - aSelected
+    const aName = String(a.subject_name || '')
+    const bName = String(b.subject_name || '')
+    return aName.localeCompare(bName)
+  })
+})
 </script>
 
 <template>
@@ -44,11 +59,14 @@ function isSubjectLocked(subjectKey) {
       <select :value="props.modalLevel" @change="onLevelChange">
         <option v-for="q in props.examLevelChoices" :key="q.label" :value="q.label">{{ q.label }}</option>
       </select>
-      <input :value="props.modalSearch" @input="onSearchInput" placeholder="Search subjects..." />
+      <div class="modal-search-row">
+        <input :value="props.modalSearch" @input="onSearchInput" placeholder="Search subjects..." />
+        <button v-if="props.modalSearch" class="mini-btn" @click="clearSearch">Clear</button>
+      </div>
       <small class="muted">Showing {{ props.resultCount }} subject{{ props.resultCount === 1 ? '' : 's' }} · Level: {{ props.modalLevel }}</small>
       <div class="subject-pick">
         <button
-          v-for="subject in props.filteredModalSubjects"
+          v-for="subject in sortedModalSubjects"
           :key="`modal-${subject.subject_key}`"
           class="subject-item picker"
           :class="{ active: props.subjectDraft.includes(subject.subject_key), locked: isSubjectLocked(subject.subject_key) }"
@@ -58,6 +76,7 @@ function isSubjectLocked(subjectKey) {
           <div>
             <div class="subject-name">{{ subject.subject_name }}</div>
             <small class="subject-meta">{{ subject.exam_board }} · {{ subject.qualification_type }}</small>
+            <small class="subject-selected-tag" v-if="props.subjectDraft.includes(subject.subject_key)">Selected</small>
           </div>
         </button>
         <div v-if="!props.filteredModalSubjects.length" class="muted">No subjects match this search and level.</div>

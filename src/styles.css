@@ -144,8 +144,17 @@ h2, h3, h4 { margin: 0 0 8px; }
 .subject-item.picker.locked .subject-meta {
   color: #93a4cd;
 }
+.subject-selected-tag {
+  margin-top: 4px;
+  color: #c9f7ff;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
 
 .subject-cards { margin-top: 10px; display: grid; gap: 8px; }
+.subject-search-input {
+  margin-top: 8px;
+}
 .subject-card {
   border-radius: 12px;
   border: 1px solid #445a97;
@@ -563,6 +572,14 @@ textarea, input, select {
   border-radius: 14px;
   background: linear-gradient(165deg, #101939, #0f1837);
   padding: 14px;
+}
+.modal-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.modal-search-row input {
+  margin-bottom: 0;
 }
 .subject-modal-card {
   width: min(940px, 96vw);
