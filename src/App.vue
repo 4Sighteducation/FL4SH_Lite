@@ -19,6 +19,7 @@ const state = reactive({
   studyIndex: 0,
   revealAnswer: false,
   sessionDone: false,
+  catalogWarning: '',
 })
 
 const subjectDraft = ref([])
@@ -29,6 +30,7 @@ const manualTopic = ref('')
 const manualFront = ref('')
 const manualBack = ref('')
 const activeTopicFilter = ref('')
+const subjectSearch = ref('')
 
 const selectedSubject = computed(() =>
   state.selectedSubjects.find((s) => s.subject_key === state.selectedSubjectKey) || null
@@ -59,6 +61,15 @@ const topicList = computed(() => {
 const filteredCards = computed(() => {
   if (!activeTopicFilter.value) return state.cards
   return state.cards.filter((c) => String(c.topic_code || '') === activeTopicFilter.value)
+})
+const filteredAvailableSubjects = computed(() => {
+  const q = subjectSearch.value.trim().toLowerCase()
+  if (!q) return state.availableSubjects
+  return state.availableSubjects.filter((s) =>
+    String(s.subject_name || '').toLowerCase().includes(q) ||
+    String(s.exam_board || '').toLowerCase().includes(q) ||
+    String(s.qualification_type || '').toLowerCase().includes(q)
+  )
 })
 
 function neonUpsell(title, message) {
@@ -121,6 +132,7 @@ async function loadContext() {
     state.user = data.user || null
     state.limits = data.limits || state.limits
     state.availableSubjects = Array.isArray(data.available_subjects) ? data.available_subjects : []
+    state.catalogWarning = String(data.catalog_warning || '')
     state.selectedSubjects = Array.isArray(data.selected_subjects) ? data.selected_subjects : []
     subjectDraft.value = state.selectedSubjects.map((s) => s.subject_key)
     if (!state.selectedSubjectKey && state.selectedSubjects[0]) state.selectedSubjectKey = state.selectedSubjects[0].subject_key
@@ -266,7 +278,7 @@ onMounted(loadContext)
   <div class="page">
     <header class="topbar neon">
       <div class="brand-wrap">
-        <div class="logo-mark">⚡</div>
+        <div class="logo-mark"><img src="/flashv2.png" alt="FL4SH logo" /></div>
         <div>
           <div class="logo">FL4SH Lite</div>
           <div class="meta">{{ state.user?.name || 'Student' }} · {{ state.user?.school_name || '' }}</div>
@@ -288,13 +300,15 @@ onMounted(loadContext)
     </section>
 
     <div v-if="state.error" class="error">{{ state.error }}</div>
+    <div v-if="state.catalogWarning" class="error">{{ state.catalogWarning }}</div>
     <div v-if="state.loading" class="loading">Loading FL4SH Lite...</div>
 
     <main class="layout" v-if="!state.loading">
       <aside class="panel">
         <h3>Your subjects</h3>
+        <input v-model="subjectSearch" placeholder="Search subjects..." />
         <div class="subject-pick">
-          <label v-for="subject in state.availableSubjects" :key="subject.subject_key" class="subject-item">
+          <label v-for="subject in filteredAvailableSubjects" :key="subject.subject_key" class="subject-item">
             <input
               type="checkbox"
               :value="subject.subject_key"
