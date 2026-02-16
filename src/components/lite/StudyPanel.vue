@@ -30,7 +30,8 @@ const activeMcq = computed(() => props.parseMcq(props.activeStudyCard || {}))
 const isFlipped = ref(false)
 const isBusyGrading = ref(false)
 const showSelfGrade = ref(false)
-const outcome = ref('') // correct | incorrect | ''
+const toastType = ref('') // correct | incorrect | ''
+const toastTargetBox = ref(0)
 const showExplanation = ref(false)
 
 const isMcqCard = computed(() => activeMcq.value.options.length > 0)
@@ -62,11 +63,18 @@ watch(
     isFlipped.value = false
     showSelfGrade.value = false
     showExplanation.value = false
-    outcome.value = ''
+    toastType.value = ''
+    toastTargetBox.value = 0
     isBusyGrading.value = false
     emit('set-reveal-answer', false)
   }
 )
+
+function computeTargetBox(isCorrect) {
+  const current = Number(props.activeStudyCard?.box_number || 1)
+  if (!isCorrect) return 1
+  return Math.max(1, Math.min(5, current + 1))
+}
 
 function chooseOption(key) {
   if (selectedOption.value || isBusyGrading.value) return
@@ -77,13 +85,15 @@ function chooseOption(key) {
 
   // MCQ auto-marks and advances.
   const isCorrect = selectedCorrect.value === true
-  outcome.value = isCorrect ? 'correct' : 'incorrect'
+  toastType.value = isCorrect ? 'correct' : 'incorrect'
+  toastTargetBox.value = computeTargetBox(isCorrect)
   isBusyGrading.value = true
   window.setTimeout(() => {
     emit('apply-study-grade', isCorrect)
     // reset UI quickly; next card watcher will run too
     isBusyGrading.value = false
-    outcome.value = ''
+    toastType.value = ''
+    toastTargetBox.value = 0
     selectedOption.value = ''
     selectedCorrect.value = null
     showExplanation.value = false
@@ -107,13 +117,15 @@ function closeSelfGrade() {
 
 function selfGrade(correct) {
   if (isBusyGrading.value) return
-  outcome.value = correct ? 'correct' : 'incorrect'
+  toastType.value = correct ? 'correct' : 'incorrect'
+  toastTargetBox.value = computeTargetBox(Boolean(correct))
   isBusyGrading.value = true
   showSelfGrade.value = false
   window.setTimeout(() => {
     emit('apply-study-grade', Boolean(correct))
     isBusyGrading.value = false
-    outcome.value = ''
+    toastType.value = ''
+    toastTargetBox.value = 0
     isFlipped.value = false
     emit('set-reveal-answer', false)
   }, 700)
@@ -251,12 +263,17 @@ function selfGrade(correct) {
           </div>
 
           <!-- Success/failure overlay (brief) -->
-          <div class="study-outcome" v-if="outcome">
-            <div class="study-outcome-card" :class="outcome">
-              <strong v-if="outcome === 'correct'">✓ Correct</strong>
-              <strong v-else>✕ Incorrect</strong>
-              <small v-if="outcome === 'correct'">Moving forward</small>
-              <small v-else>Back to Box 1</small>
+          <div class="study-outcome" v-if="toastType">
+            <div class="study-outcome-card" :class="toastType">
+              <div class="study-outcome-title" v-if="toastType === 'correct'">
+                Congrats — that card has moved up to Box {{ toastTargetBox }}.
+              </div>
+              <div class="study-outcome-title" v-else>
+                Unlucky — you’ll need to try that again tomorrow… moving back to Box 1.
+              </div>
+              <div class="study-outcome-sub">
+                {{ props.activeStudyCard?.topic_code || 'General' }} · Box {{ props.activeStudyCard?.box_number || 1 }}
+              </div>
             </div>
           </div>
 

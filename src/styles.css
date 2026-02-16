@@ -1563,10 +1563,22 @@ textarea, input, select {
 .study-outcome-card.correct{
   border-color: rgba(0,255,136,0.35);
   box-shadow: 0 0 18px rgba(0,255,136,0.12);
+  background: linear-gradient(165deg, rgba(0,255,136,0.14), rgba(10,16,32,0.78));
 }
 .study-outcome-card.incorrect{
   border-color: rgba(255,51,102,0.35);
   box-shadow: 0 0 18px rgba(255,51,102,0.12);
+  background: linear-gradient(165deg, rgba(255,51,102,0.14), rgba(10,16,32,0.78));
+}
+.study-outcome-title{
+  font-weight: 900;
+  color: #eaf0ff;
+  letter-spacing: -0.1px;
+}
+.study-outcome-sub{
+  font-family: "Space Mono", monospace;
+  font-size: 0.72rem;
+  color: rgba(130,150,210,0.85);
 }
 .modal-search-row {
   display: flex;
