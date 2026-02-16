@@ -45,7 +45,7 @@ function onSearchInput(event) {
       >
         <span class="subject-name">{{ s.subject_name }}</span>
         <small class="subject-meta">{{ s.exam_board }} · {{ s.qualification_type }}</small>
-        <small class="subject-count">{{ s.card_count || 0 }}/{{ props.limits.max_cards_per_subject }} cards</small>
+        <small class="subject-count">{{ s.card_count || 0 }} total cards</small>
         <label class="subject-color-row">
           <span>Color</span>
           <input

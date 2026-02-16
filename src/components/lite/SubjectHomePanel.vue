@@ -17,8 +17,7 @@ function onSearchInput(event) {
 function cardsRemaining(subject) {
   const remaining = Number(subject?.cards_remaining)
   if (Number.isFinite(remaining)) return Math.max(0, remaining)
-  const used = Number(subject?.card_count || 0)
-  return Math.max(0, Number(props.limits.max_cards_per_subject || 20) - used)
+  return Number(props.limits.max_cards_per_subject || 20)
 }
 </script>
 
@@ -47,7 +46,7 @@ function cardsRemaining(subject) {
         <h3>{{ s.subject_name }}</h3>
         <p class="subject-meta">{{ s.exam_board }} · {{ s.qualification_type }}</p>
         <small class="subject-count">{{ s.card_count || 0 }} saved cards</small>
-        <small class="subject-meta">{{ cardsRemaining(s) }} card slots left in Lite</small>
+        <small class="subject-meta">{{ cardsRemaining(s) }} AI slots left in Lite</small>
       </button>
     </div>
     <div v-if="props.allSelectedSubjectsLength > 0 && !props.selectedSubjects.length" class="muted">

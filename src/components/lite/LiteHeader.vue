@@ -28,7 +28,7 @@ const emit = defineEmits(['store-click', 'website-click'])
   </header>
 
   <section class="notice neon">
-    <strong>FL4SH Lite</strong> is limited to {{ props.limits.max_subjects }} subjects and {{ props.limits.max_cards_per_subject }} cards per subject.
+    <strong>FL4SH Lite</strong> is limited to {{ props.limits.max_subjects }} subjects and {{ props.limits.max_cards_per_subject }} AI-generated cards per subject (manual cards are unlimited).
     For full mobile-native experience, visit <a :href="props.links.website" target="_blank" rel="noopener" @click="emit('website-click', 'header_notice')">fl4shcards.com</a>.
   </section>
 </template>

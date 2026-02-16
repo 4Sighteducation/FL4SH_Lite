@@ -135,6 +135,8 @@ function clampInt(n: any, min: number, max: number, fallback: number): number {
   return Math.max(min, Math.min(max, Math.trunc(v)));
 }
 
+const MAX_AI_CARDS_PER_SUBJECT = 20;
+
 serve(async (req: Request) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -156,6 +158,7 @@ serve(async (req: Request) => {
     const examBoard = String(payload.examBoard || payload.exam_board || "").trim();
     const questionType = String(payload.questionType || payload.question_type || "short_answer").trim();
     const requested = clampInt(payload.numCards ?? payload.num_cards, 1, 5, 3);
+    const previewOnly = Boolean(payload.preview_only);
     const contentGuidance = String(payload.contentGuidance || payload.content_guidance || "").trim() || undefined;
 
     if (!subjectKey || !subject || !topic || !examBoard) {
@@ -165,17 +168,24 @@ serve(async (req: Request) => {
     const db = getAppDbClient();
     const user = await upsertLiteUser(db, identity);
 
-    const { data: statRow, error: statErr } = await db
-      .from("fl4sh_lite_user_subject_stats")
-      .select("card_count,cards_remaining")
+    const { data: selectedSubject, error: selectedErr } = await db
+      .from("fl4sh_lite_user_subjects")
+      .select("subject_key")
       .eq("user_id", user.id)
       .eq("subject_key", subjectKey)
       .maybeSingle();
+    if (selectedErr) return json(500, { ok: false, error: selectedErr.message });
+    if (!selectedSubject) return json(400, { ok: false, error: "SUBJECT_NOT_SELECTED" });
 
-    if (statErr) return json(500, { ok: false, error: statErr.message });
-    if (!statRow) return json(400, { ok: false, error: "SUBJECT_NOT_SELECTED" });
+    const { data: aiRows, error: aiCountErr } = await db
+      .from("fl4sh_lite_cards")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("subject_key", subjectKey)
+      .like("card_type", "ai_%");
 
-    const remaining = Number(statRow.cards_remaining ?? 0);
+    if (aiCountErr) return json(500, { ok: false, error: aiCountErr.message });
+    const remaining = MAX_AI_CARDS_PER_SUBJECT - Number((aiRows || []).length);
     if (remaining <= 0) return json(400, { ok: false, error: "CARD_LIMIT_REACHED" });
     const numCards = Math.min(requested, remaining);
 
@@ -214,10 +224,21 @@ serve(async (req: Request) => {
       topic_code: String(payload.topic_code || topic || "").slice(0, 120) || null,
       front_text: String(c?.question || "").trim(),
       back_text: toBackText(c, questionType),
-      card_type: questionType,
+      card_type: `ai_${questionType}`,
     })).filter((r: any) => r.front_text && r.back_text);
 
     if (!rows.length) return json(502, { ok: false, error: "No valid cards to save" });
+
+    if (previewOnly) {
+      return json(200, {
+        ok: true,
+        source: "fl4sh-generator",
+        requested,
+        generated: rows.length,
+        preview_cards: rows.map((row: any, index: number) => ({ ...row, preview_id: index + 1 })),
+        ai_remaining_after_save: Math.max(0, remaining - rows.length),
+      });
+    }
 
     const { data: inserted, error: insertErr } = await db
       .from("fl4sh_lite_cards")
@@ -226,20 +247,13 @@ serve(async (req: Request) => {
 
     if (insertErr) return json(400, { ok: false, error: insertErr.message });
 
-    const { data: stats } = await db
-      .from("fl4sh_lite_user_subject_stats")
-      .select("card_count,cards_remaining")
-      .eq("user_id", user.id)
-      .eq("subject_key", subjectKey)
-      .maybeSingle();
-
     return json(200, {
       ok: true,
       source: "fl4sh-generator",
       requested,
       generated: rows.length,
       cards: inserted || [],
-      stats: stats || null,
+      ai_remaining_after_save: Math.max(0, remaining - rows.length),
     });
   } catch (e: any) {
     return json(500, { ok: false, error: e?.message || "Internal error" });

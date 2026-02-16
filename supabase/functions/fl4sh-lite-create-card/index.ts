@@ -88,7 +88,7 @@ serve(async (req: Request) => {
     const frontText = String(payload.front_text || "").trim();
     const backText = String(payload.back_text || "").trim();
     const topicCode = String(payload.topic_code || "").trim() || null;
-    const cardType = String(payload.card_type || "short_answer").trim() || "short_answer";
+    const cardType = String(payload.card_type || "manual").trim() || "manual";
 
     if (!subjectKey || !frontText || !backText) {
       return json(400, { ok: false, error: "Missing subject_key/front_text/back_text" });

@@ -47,6 +47,7 @@ const aiType = ref('short_answer')
 const manualTopic = ref('')
 const manualFront = ref('')
 const manualBack = ref('')
+const manualSelectedTopic = ref('')
 const activeTopicFilter = ref('')
 const subjectSearch = ref('')
 const activeBoxFilter = ref(0)
@@ -61,6 +62,13 @@ const expandedTopics = ref({})
 const cardModal = reactive(createInitialCardModal())
 const topicModalCardIds = ref([])
 const topicModalIndex = ref(0)
+const createFlowOpen = ref(false)
+const createFlowStep = ref('topic')
+const createTopicSearch = ref('')
+const createSelectedTopic = ref('')
+const createSelectedMethod = ref('')
+const aiGuidance = ref('')
+const aiPreviewCards = ref([])
 const {
   selectedSubject,
   dueCards,
@@ -110,6 +118,20 @@ const dueCountInSubject = computed(() => state.cards.filter((card) => isCardDue(
 const masteredCountInSubject = computed(() => state.cards.filter((card) => Number(card?.box_number || 1) === 5).length)
 const totalCardsInSubject = computed(() => state.cards.length)
 const hasActiveFilters = computed(() => Boolean(activeTopicFilter.value || activeBoxFilter.value))
+const topicCountInSubject = computed(() => {
+  const set = new Set(
+    state.cards
+      .map((card) => String(card?.topic_code || '').trim())
+      .filter(Boolean)
+  )
+  return set.size
+})
+const createTopicCandidates = computed(() => {
+  const q = createTopicSearch.value.trim().toLowerCase()
+  return topicRows.value
+    .filter((row) => !row.hasChildren)
+    .filter((row) => !q || String(row.label || '').toLowerCase().includes(q) || String(row.topic_code || '').toLowerCase().includes(q))
+})
 const canPrevModalCard = computed(() => topicModalCardIds.value.length > 1 && topicModalIndex.value > 0)
 const canNextModalCard = computed(
   () => topicModalCardIds.value.length > 1 && topicModalIndex.value < topicModalCardIds.value.length - 1
@@ -160,7 +182,7 @@ function handleLiteError(error, fallbackMessage, placement = 'general') {
   if (code.includes('CARD_LIMIT_REACHED')) {
     openUpsell(
       'Lite card limit reached',
-      `FL4SH Lite allows ${state.limits.max_cards_per_subject} cards per subject. Get the full FL4SH app for unlimited cards and full study tools.`,
+      `FL4SH Lite allows ${state.limits.max_cards_per_subject} AI-generated cards per subject. Manual cards are unlimited.`,
       placement,
       { error_code: code }
     )
@@ -364,6 +386,133 @@ function toggleTopicRow(row) {
   manualTopic.value = row.topic_code
   aiTopic.value = row.topic_code
   openTopicCards(row.topic_code, row.label || row.topic_code || 'this topic')
+}
+
+function resetCreateFlow() {
+  createFlowStep.value = 'topic'
+  createTopicSearch.value = ''
+  createSelectedTopic.value = activeTopicFilter.value || aiTopic.value || manualTopic.value || ''
+  createSelectedMethod.value = ''
+  manualSelectedTopic.value = createSelectedTopic.value
+  manualFront.value = ''
+  manualBack.value = ''
+  aiTopic.value = createSelectedTopic.value
+  aiGuidance.value = ''
+  aiPreviewCards.value = []
+}
+
+function openCreateFlow() {
+  clearError()
+  resetCreateFlow()
+  createFlowOpen.value = true
+}
+
+function closeCreateFlow() {
+  createFlowOpen.value = false
+  resetCreateFlow()
+}
+
+function pickCreateTopic(topicCode) {
+  createSelectedTopic.value = String(topicCode || '').trim()
+  manualSelectedTopic.value = createSelectedTopic.value
+  aiTopic.value = createSelectedTopic.value
+  createFlowStep.value = 'method'
+}
+
+function chooseCreateMethod(method) {
+  createSelectedMethod.value = method
+  createFlowStep.value = method === 'manual' ? 'manual' : 'ai_options'
+}
+
+async function createManualFromFlow() {
+  clearError()
+  if (!state.selectedSubjectKey || !manualSelectedTopic.value) {
+    state.error = 'Pick a topic before creating a card.'
+    return
+  }
+  if (!manualFront.value.trim() || !manualBack.value.trim()) {
+    state.error = 'Add both question and answer to create a manual card.'
+    return
+  }
+  state.busy = true
+  try {
+    await createLiteCard(callFn, {
+      subject_key: state.selectedSubjectKey,
+      topic_code: manualSelectedTopic.value,
+      front_text: manualFront.value,
+      back_text: manualBack.value,
+      card_type: 'manual',
+    })
+    await loadCards()
+    closeCreateFlow()
+  } catch (e) {
+    handleLiteError(e, 'Could not create manual card.', 'manual_card_create')
+  } finally {
+    state.busy = false
+  }
+}
+
+async function generatePreviewCards() {
+  clearError()
+  if (!selectedSubject.value || !aiTopic.value.trim()) {
+    state.error = 'Choose a topic before generating AI cards.'
+    return
+  }
+  state.busy = true
+  try {
+    const data = await generateLiteCards(callFn, {
+      subject_key: state.selectedSubjectKey,
+      subject: selectedSubject.value.subject_name,
+      topic: aiTopic.value,
+      topic_code: aiTopic.value,
+      examBoard: selectedSubject.value.exam_board,
+      examType: selectedSubject.value.qualification_type,
+      questionType: aiType.value,
+      numCards: Math.max(1, Math.min(5, Number(aiCount.value || 3))),
+      contentGuidance: aiGuidance.value || '',
+      preview_only: true,
+    })
+    aiPreviewCards.value = Array.isArray(data.preview_cards) ? data.preview_cards : []
+    if (!aiPreviewCards.value.length) {
+      state.error = 'No preview cards generated. Try different guidance or topic wording.'
+      return
+    }
+    createFlowStep.value = 'ai_preview'
+  } catch (e) {
+    handleLiteError(e, 'Could not generate preview cards.', 'ai_generate')
+  } finally {
+    state.busy = false
+  }
+}
+
+function removePreviewCard(index) {
+  aiPreviewCards.value = aiPreviewCards.value.filter((_, i) => i !== index)
+}
+
+async function savePreviewCardsToBank() {
+  clearError()
+  if (!state.selectedSubjectKey || !aiPreviewCards.value.length) {
+    state.error = 'No preview cards selected to save.'
+    return
+  }
+  state.busy = true
+  try {
+    for (const card of aiPreviewCards.value) {
+      await createLiteCard(callFn, {
+        subject_key: state.selectedSubjectKey,
+        topic_code: String(card?.topic_code || aiTopic.value || '').trim() || null,
+        front_text: String(card?.front_text || '').trim(),
+        back_text: String(card?.back_text || '').trim(),
+        card_type: String(card?.card_type || `ai_${aiType.value}`),
+      })
+    }
+    await loadCards()
+    closeCreateFlow()
+  } catch (e) {
+    handleLiteError(e, 'Could not save generated cards.', 'ai_generate_save')
+  } finally {
+    state.busy = false
+  }
 }
 function openCardModal(card) {
   if (!card) return
@@ -604,10 +753,6 @@ onMounted(loadContext)
         :visible="view === 'subject'"
         :selected-subject="selectedSubject"
         :cards="state.cards"
-        :box-stats="boxStats"
-        :active-box-filter="activeBoxFilter"
-        :pulse-box="pulseBox"
-        :moving-card-text="movingCardText"
         :topic-tree-loading="state.topicTreeLoading"
         :topic-tree-error="state.topicTreeError"
         :active-topic-filter="activeTopicFilter"
@@ -616,35 +761,15 @@ onMounted(loadContext)
         :selected-subject-key="state.selectedSubjectKey"
         :selected-subject-meta="selectedSubjectMeta"
         :get-subject-color="getSubjectColor"
-        :short-line="shortLine"
-        :is-card-due="isCardDue"
-        :format-date="formatDate"
-        :manual-topic="manualTopic"
-        :manual-front="manualFront"
-        :manual-back="manualBack"
-        :ai-topic="aiTopic"
-        :ai-type="aiType"
-        :ai-count="aiCount"
-        :busy="state.busy"
-        :filtered-cards="filteredCards"
         :due-count="dueCountInSubject"
         :mastered-count="masteredCountInSubject"
+        :topic-count="topicCountInSubject"
         :has-active-filters="hasActiveFilters"
         @start-study="startStudy"
         @back-home="view = 'home'"
-        @set-active-box-filter="activeBoxFilter = $event"
         @set-active-topic-filter="activeTopicFilter = $event"
         @toggle-topic-row="toggleTopicRow"
-        @update:manualTopic="manualTopic = $event"
-        @update:manualFront="manualFront = $event"
-        @update:manualBack="manualBack = $event"
-        @update:aiTopic="aiTopic = $event"
-        @update:aiType="aiType = $event"
-        @update:aiCount="aiCount = $event"
-        @add-manual-card="addManualCard"
-        @generate-cards="generateCards"
-        @open-card-modal="openCardModal"
-        @delete-card="requestDeleteCard"
+        @open-create-flow="openCreateFlow"
       />
 
       <StudyPanel
@@ -699,6 +824,105 @@ onMounted(loadContext)
       @toggle-subject="selectSubjectFromModal"
       @save-subjects="saveSubjects"
     />
+
+    <div class="modal" v-if="createFlowOpen">
+      <div class="modal-card neon create-flow-modal">
+        <div class="panel-head">
+          <h3>Create Flashcards</h3>
+          <button class="mini-btn" @click="closeCreateFlow">Close</button>
+        </div>
+
+        <template v-if="createFlowStep === 'topic'">
+          <p class="muted">Step 1: choose a topic</p>
+          <input v-model="createTopicSearch" placeholder="Search topic..." />
+          <div class="topic-tree-list">
+            <button
+              v-for="row in createTopicCandidates"
+              :key="`create-${row.id}`"
+              class="topic-row"
+              :class="{ active: createSelectedTopic === row.topic_code }"
+              @click="pickCreateTopic(row.topic_code)"
+            >
+              <span class="topic-label">{{ row.label }}</span>
+              <strong>{{ row.count || 0 }}</strong>
+            </button>
+          </div>
+        </template>
+
+        <template v-else-if="createFlowStep === 'method'">
+          <p class="muted">Step 2: choose creation method for <strong>{{ createSelectedTopic }}</strong></p>
+          <div class="create-method-grid">
+            <button class="create-method-card" @click="chooseCreateMethod('ai')">
+              <h4>AI Generated</h4>
+              <p>Create exam-style cards quickly from your selected topic.</p>
+            </button>
+            <button class="create-method-card" @click="chooseCreateMethod('manual')">
+              <h4>Create Manually</h4>
+              <p>Write your own custom flashcards for this topic.</p>
+            </button>
+          </div>
+        </template>
+
+        <template v-else-if="createFlowStep === 'manual'">
+          <p class="muted">Manual card for <strong>{{ manualSelectedTopic }}</strong></p>
+          <textarea v-model="manualFront" placeholder="Question / front of card"></textarea>
+          <textarea v-model="manualBack" placeholder="Answer / back of card"></textarea>
+          <div class="toolbar">
+            <button class="btn ghost" @click="createFlowStep = 'method'">Back</button>
+            <button class="btn neon-btn" :disabled="state.busy" @click="createManualFromFlow">
+              {{ state.busy ? 'Saving...' : 'Save manual card' }}
+            </button>
+          </div>
+        </template>
+
+        <template v-else-if="createFlowStep === 'ai_options'">
+          <p class="muted">AI generation for <strong>{{ aiTopic }}</strong></p>
+          <div class="forms">
+            <div class="form-card">
+              <label class="muted">AI Card Type</label>
+              <select v-model="aiType">
+                <option value="short_answer">Short answer</option>
+                <option value="multiple_choice">Multiple choice</option>
+                <option value="essay">Essay</option>
+                <option value="acronym">Acronym</option>
+              </select>
+              <label class="muted">Number of Cards (max 5 per run)</label>
+              <input type="number" min="1" max="5" v-model="aiCount" />
+              <label class="muted">Additional guidance (optional)</label>
+              <textarea v-model="aiGuidance" placeholder="Focus on practical examples, key terms..." />
+            </div>
+          </div>
+          <small class="muted">Lite allows up to 20 AI-generated cards per subject. Manual cards are unlimited.</small>
+          <div class="toolbar" style="margin-top:8px;">
+            <button class="btn ghost" @click="createFlowStep = 'method'">Back</button>
+            <button class="btn hot" :disabled="state.busy" @click="generatePreviewCards">
+              {{ state.busy ? 'Generating...' : 'Generate preview' }}
+            </button>
+          </div>
+        </template>
+
+        <template v-else-if="createFlowStep === 'ai_preview'">
+          <p class="muted">Preview generated cards. Remove any you do not want before saving.</p>
+          <div class="cards">
+            <article class="card" v-for="(card, index) in aiPreviewCards" :key="`preview-${index}`">
+              <h4>{{ card.front_text }}</h4>
+              <small class="muted">Type: {{ card.card_type }}</small>
+              <p>{{ shortLine(card.back_text, 220) }}</p>
+              <div class="card-actions">
+                <span>{{ card.topic_code || aiTopic }}</span>
+                <button @click="removePreviewCard(index)">Remove</button>
+              </div>
+            </article>
+          </div>
+          <div class="toolbar" style="margin-top:8px;">
+            <button class="btn ghost" @click="createFlowStep = 'ai_options'">Back</button>
+            <button class="btn neon-btn" :disabled="state.busy || aiPreviewCards.length === 0" @click="savePreviewCardsToBank">
+              {{ state.busy ? 'Saving...' : `Save ${aiPreviewCards.length} card${aiPreviewCards.length === 1 ? '' : 's'}` }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </div>
 
     <CardDetailModal
       :visible="cardModal.open"
