@@ -602,12 +602,6 @@ function openPreviewMeta(card, index) {
   const parsed = parsePreviewMcq(card)
   previewMetaCard.value = {
     index: index + 1,
-    type: String(card?.card_type || 'unknown'),
-    topic: String(card?.topic_code || aiTopic.value || '').trim(),
-    front: String(card?.front_text || '').trim(),
-    back: String(card?.back_text || '').trim(),
-    optionCount: parsed.options.length,
-    correct: parsed.correct,
     info: parsed.info,
   }
 }
@@ -1045,10 +1039,8 @@ onMounted(loadContext)
                   <button class="mini-btn" @click="openPreviewMeta(card, index)">Details</button>
                 </div>
               </div>
-              <small class="muted">Type: {{ card.card_type }}</small>
               <div class="flip-shell" :class="{ flipped: isPreviewFlipped(card, index) }">
                 <div class="flip-face front">
-                  <p class="preview-face-text">{{ card.front_text }}</p>
                   <div class="mcq-grid" v-if="parsePreviewMcq(card).options.length">
                     <button
                       v-for="option in parsePreviewMcq(card).options"
@@ -1057,9 +1049,11 @@ onMounted(loadContext)
                       :class="previewOptionClass(card, index, option.key, parsePreviewMcq(card).correct)"
                       @click="choosePreviewOption(card, index, option.key)"
                     >
-                      <strong>{{ option.key }})</strong> {{ option.text }}
+                      <span class="preview-option-key">{{ option.key }}</span>
+                      <span class="preview-option-text">{{ option.text }}</span>
                     </button>
                   </div>
+                  <p class="preview-face-text" v-else>{{ card.front_text }}</p>
                 </div>
                 <div class="flip-face back">
                   <p class="preview-face-text">
@@ -1088,37 +1082,11 @@ onMounted(loadContext)
     <div class="modal" v-if="previewMetaCard">
       <div class="modal-card neon">
         <div class="panel-head">
-          <h3>Card Metadata</h3>
+          <h3>Additional Information</h3>
           <button class="mini-btn" @click="closePreviewMeta">Close</button>
         </div>
-        <div class="card-detail-grid">
-          <div>
-            <strong>Preview card</strong>
-            <span>#{{ previewMetaCard.index }}</span>
-          </div>
-          <div>
-            <strong>Type</strong>
-            <span>{{ previewMetaCard.type }}</span>
-          </div>
-          <div>
-            <strong>Topic</strong>
-            <span>{{ previewMetaCard.topic || 'Not set' }}</span>
-          </div>
-          <div>
-            <strong>MCQ options</strong>
-            <span>{{ previewMetaCard.optionCount }}</span>
-          </div>
-          <div>
-            <strong>Correct option</strong>
-            <span>{{ previewMetaCard.correct || 'Not detected' }}</span>
-          </div>
-          <div>
-            <strong>Question length</strong>
-            <span>{{ previewMetaCard.front.length }} chars</span>
-          </div>
-        </div>
         <div class="section-shell">
-          <strong class="muted">Additional information</strong>
+          <strong class="muted">Card {{ previewMetaCard.index }}</strong>
           <p>{{ previewMetaCard.info || 'No additional metadata extracted from this card.' }}</p>
         </div>
       </div>

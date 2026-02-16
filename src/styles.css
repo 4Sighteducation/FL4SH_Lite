@@ -507,13 +507,33 @@ textarea, input, select {
   gap: 6px;
 }
 .mcq-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
   text-align: left;
   border: 1px solid #4f66a7;
   border-radius: 9px;
-  padding: 8px;
+  padding: 10px 12px;
   color: #e3ecff;
   background: #101b3f;
   cursor: pointer;
+}
+.preview-option-key {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid #5a6fae;
+  display: grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #c8d8ff;
+  background: rgba(8, 16, 40, 0.72);
+}
+.preview-option-text {
+  line-height: 1.42;
+  color: #e2ebff;
 }
 .mcq-option.active {
   border-color: var(--primary);
@@ -522,9 +542,17 @@ textarea, input, select {
   border-color: #2fb674;
   background: rgba(47, 182, 116, 0.12);
 }
+.mcq-option.correct .preview-option-key {
+  border-color: #2fb674;
+  color: #d6ffe9;
+}
 .mcq-option.wrong {
   border-color: #e36687;
   background: rgba(227, 102, 135, 0.14);
+}
+.mcq-option.wrong .preview-option-key {
+  border-color: #e36687;
+  color: #ffe6ed;
 }
 .card-detail-grid {
   margin-top: 10px;
