@@ -70,6 +70,14 @@ async function upsertLiteUser(db: any, identity: any) {
   return data;
 }
 
+function scheduleDaysForBox(box: number): number {
+  if (box <= 1) return 1;
+  if (box === 2) return 2;
+  if (box === 3) return 4;
+  if (box === 4) return 7;
+  return 21;
+}
+
 serve(async (req: Request) => {
   const cors = handleCors(req);
   if (cors) return cors;
@@ -84,36 +92,53 @@ serve(async (req: Request) => {
     const identity = parseIdentity(payload);
     if (!identity) return json(400, { ok: false, error: "Missing email in request body" });
 
-    const subjectKey = String(payload.subject_key || "").trim() || null;
+    const cardId = String(payload.card_id || "").trim();
+    const wasCorrect = Boolean(payload.correct);
+    if (!cardId) return json(400, { ok: false, error: "Missing card_id" });
+
     const db = getAppDbClient();
     const user = await upsertLiteUser(db, identity);
 
-    let query = db
+    const { data: card, error: cardErr } = await db
       .from("fl4sh_lite_cards")
-      .select("id,subject_key,topic_code,front_text,back_text,card_type,box_number,streak,last_reviewed_at,next_review_at,created_at,updated_at")
+      .select("id,user_id,subject_key,box_number,streak,next_review_at")
+      .eq("id", cardId)
       .eq("user_id", user.id)
-      .order("next_review_at", { ascending: true, nullsFirst: true })
-      .order("created_at", { ascending: false });
+      .maybeSingle();
 
-    if (subjectKey) query = query.eq("subject_key", subjectKey);
+    if (cardErr) return json(500, { ok: false, error: cardErr.message });
+    if (!card) return json(404, { ok: false, error: "Card not found" });
 
-    const { data: cards, error } = await query;
-    if (error) return json(500, { ok: false, error: error.message });
+    const prevBox = Number(card.box_number || 1);
+    const nextBox = wasCorrect ? Math.min(5, prevBox + 1) : 1;
+    const nextStreak = wasCorrect ? Number(card.streak || 0) + 1 : 0;
+    const nextDays = scheduleDaysForBox(nextBox);
+    const nextReviewAt = new Date(Date.now() + nextDays * 24 * 60 * 60 * 1000).toISOString();
+    const nowIso = new Date().toISOString();
 
-    let statsQuery = db
-      .from("fl4sh_lite_user_subject_stats")
-      .select("subject_key,subject_name,exam_board,qualification_type,card_count,cards_remaining")
-      .eq("user_id", user.id);
+    const { data: updated, error: updateErr } = await db
+      .from("fl4sh_lite_cards")
+      .update({
+        box_number: nextBox,
+        streak: nextStreak,
+        last_reviewed_at: nowIso,
+        next_review_at: nextReviewAt,
+      })
+      .eq("id", card.id)
+      .eq("user_id", user.id)
+      .select("id,subject_key,box_number,streak,last_reviewed_at,next_review_at,updated_at")
+      .single();
 
-    if (subjectKey) statsQuery = statsQuery.eq("subject_key", subjectKey);
-
-    const { data: stats, error: statsErr } = await statsQuery;
-    if (statsErr) return json(500, { ok: false, error: statsErr.message });
+    if (updateErr) return json(500, { ok: false, error: updateErr.message });
 
     return json(200, {
       ok: true,
-      cards: cards || [],
-      stats: stats || [],
+      card: updated,
+      transition: {
+        from_box: prevBox,
+        to_box: nextBox,
+        correct: wasCorrect,
+      },
     });
   } catch (e: any) {
     return json(500, { ok: false, error: e?.message || "Internal error" });

@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { LINKS, callFn, getIdentity } from './lib/api'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { LINKS, callFn } from './lib/api'
 
 const view = ref('home') // home | subject | study
 const state = reactive({
@@ -17,6 +17,7 @@ const state = reactive({
   upsellTitle: '',
   upsellMessage: '',
   studyIndex: 0,
+  sessionReviewed: 0,
   revealAnswer: false,
   sessionDone: false,
   catalogWarning: '',
@@ -39,17 +40,11 @@ const selectedSubject = computed(() =>
   state.selectedSubjects.find((s) => s.subject_key === state.selectedSubjectKey) || null
 )
 
-const progressionKey = computed(() => {
-  const u = state.user?.email || getIdentity()?.email || 'anonymous'
-  return `fl4sh-lite-progress:${u}:${state.selectedSubjectKey || 'none'}`
-})
-const progressionMap = ref({})
 const dueCards = computed(() => {
   const now = Date.now()
   return state.cards.filter((c) => {
-    const p = progressionMap.value[c.id]
-    if (!p || !p.nextReviewAt) return true
-    return new Date(p.nextReviewAt).getTime() <= now
+    const dueAt = c.next_review_at ? new Date(c.next_review_at).getTime() : 0
+    return !dueAt || dueAt <= now
   })
 })
 const activeStudyCard = computed(() => dueCards.value[state.studyIndex] || null)
@@ -87,7 +82,7 @@ const boxConfig = [
 ]
 
 function cardBox(card) {
-  return Number(progressionMap.value[card.id]?.box || 1)
+  return Number(card.box_number || 1)
 }
 
 function shortLine(text, max = 44) {
@@ -121,48 +116,33 @@ function clearError() {
   state.error = ''
 }
 
-function loadProgression() {
-  try {
-    progressionMap.value = JSON.parse(localStorage.getItem(progressionKey.value) || '{}')
-  } catch {
-    progressionMap.value = {}
-  }
-}
-
-function saveProgression() {
-  localStorage.setItem(progressionKey.value, JSON.stringify(progressionMap.value))
-}
-
-function scheduleDaysForBox(box) {
-  if (box <= 1) return 1
-  if (box === 2) return 2
-  if (box === 3) return 4
-  if (box === 4) return 7
-  return 21
-}
-
-function applyStudyGrade(correct) {
+async function applyStudyGrade(correct) {
   const card = activeStudyCard.value
-  if (!card) return
-  const prev = progressionMap.value[card.id] || { box: 1 }
-  const nextBox = correct ? Math.min(5, Number(prev.box || 1) + 1) : 1
-  const nextDays = scheduleDaysForBox(nextBox)
-  const nextReviewAt = new Date(Date.now() + nextDays * 24 * 60 * 60 * 1000).toISOString()
-  progressionMap.value[card.id] = {
-    box: nextBox,
-    lastReviewedAt: new Date().toISOString(),
-    nextReviewAt,
+  if (!card || state.busy) return
+  clearError()
+  state.busy = true
+  try {
+    const data = await callFn('fl4sh-lite-submit-review', {
+      card_id: card.id,
+      correct,
+    })
+    const updated = data.card || {}
+    const targetBox = Number(updated.box_number || (correct ? Math.min(5, Number(card.box_number || 1) + 1) : 1))
+    state.cards = state.cards.map((c) => (c.id === card.id ? { ...c, ...updated } : c))
+    movingCardText.value = shortLine(card.front_text, 36)
+    pulseBox.value = targetBox
+    window.setTimeout(() => {
+      pulseBox.value = 0
+      movingCardText.value = ''
+    }, 900)
+    state.revealAnswer = false
+    state.sessionReviewed += 1
+    if (dueCards.value.length === 0) state.sessionDone = true
+  } catch (e) {
+    state.error = e.message || 'Could not submit review.'
+  } finally {
+    state.busy = false
   }
-  movingCardText.value = shortLine(card.front_text, 36)
-  pulseBox.value = nextBox
-  window.setTimeout(() => {
-    pulseBox.value = 0
-    movingCardText.value = ''
-  }, 900)
-  saveProgression()
-  state.revealAnswer = false
-  state.studyIndex += 1
-  if (state.studyIndex >= dueCards.value.length) state.sessionDone = true
 }
 
 async function loadContext() {
@@ -198,7 +178,6 @@ async function loadCards() {
         s.subject_key === state.selectedSubjectKey ? { ...s, ...data.stats[0] } : s
       )
     }
-    loadProgression()
   } catch (e) {
     state.error = e.message || 'Failed to load cards.'
   }
@@ -300,17 +279,11 @@ async function deleteCard(cardId) {
 
 function startStudy() {
   state.studyIndex = 0
+  state.sessionReviewed = 0
   state.sessionDone = false
   state.revealAnswer = false
   view.value = 'study'
 }
-
-watch(
-  () => state.selectedSubjectKey,
-  () => {
-    loadProgression()
-  }
-)
 
 onMounted(loadContext)
 </script>
@@ -460,7 +433,7 @@ onMounted(loadContext)
               <small class="muted" v-if="c.topic_code">Topic: {{ c.topic_code }}</small>
               <p>{{ c.back_text }}</p>
               <div class="card-actions">
-                <span>Box {{ progressionMap[c.id]?.box || 1 }}</span>
+                <span>Box {{ c.box_number || 1 }}</span>
                 <button @click="deleteCard(c.id)" :disabled="state.busy">Delete</button>
               </div>
             </article>
@@ -498,9 +471,9 @@ onMounted(loadContext)
             </article>
           </div>
         </div>
-        <p class="muted" v-if="!state.sessionDone">Due cards: {{ dueCards.length }} · Card {{ Math.min(state.studyIndex + 1, dueCards.length) }} / {{ dueCards.length }}</p>
+        <p class="muted" v-if="!state.sessionDone">Due cards left: {{ dueCards.length }} · Reviewed this session: {{ state.sessionReviewed }}</p>
         <div v-if="state.sessionDone" class="notice neon">
-          Session complete. You reviewed {{ dueCards.length }} due cards.
+          Session complete. You reviewed {{ state.sessionReviewed }} cards.
         </div>
         <template v-else-if="activeStudyCard">
           <article class="study-card">
