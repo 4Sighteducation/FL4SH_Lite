@@ -518,6 +518,8 @@ onMounted(loadContext)
         :selected-subject-meta="selectedSubjectMeta"
         :get-subject-color="getSubjectColor"
         :short-line="shortLine"
+        :is-card-due="isCardDue"
+        :format-date="formatDate"
         :manual-topic="manualTopic"
         :manual-front="manualFront"
         :manual-back="manualBack"

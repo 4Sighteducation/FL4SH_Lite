@@ -502,6 +502,25 @@ textarea, input, select {
   padding: 10px;
 }
 .card p { margin: 6px 0 0; white-space: pre-wrap; color: #d7dfff; }
+.due-tag,
+.scheduled-tag {
+  display: inline-flex;
+  margin-top: 6px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+.due-tag {
+  border: 1px solid #2fbb78;
+  color: #d5ffe8;
+  background: rgba(47, 187, 120, 0.16);
+}
+.scheduled-tag {
+  border: 1px solid #5871ad;
+  color: #d6e5ff;
+  background: rgba(66, 91, 150, 0.2);
+}
 .card-actions { margin-top: 8px; display: flex; justify-content: space-between; align-items: center; }
 .card-actions button {
   border: 1px solid #5f76ba;

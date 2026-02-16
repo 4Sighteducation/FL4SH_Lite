@@ -11,6 +11,10 @@ type SubjectSelection = {
   qualification_type?: string | null;
 };
 
+function normalizeSubjectKey(value: unknown): string {
+  return String(value || "").trim();
+}
+
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -94,14 +98,20 @@ serve(async (req: Request) => {
     if (!identity) return json(400, { ok: false, error: "Missing email in request body" });
 
     const subjectsRaw = Array.isArray(payload.subjects) ? payload.subjects : [];
-    const subjects: SubjectSelection[] = subjectsRaw
-      .map((s: any) => ({
-        subject_key: String(s?.subject_key || "").trim(),
-        subject_name: s?.subject_name ? String(s.subject_name) : null,
-        exam_board: s?.exam_board ? String(s.exam_board) : null,
-        qualification_type: s?.qualification_type ? String(s.qualification_type) : null,
-      }))
-      .filter((s) => s.subject_key);
+    const dedupedSubjects = new Map<string, SubjectSelection>();
+    for (const raw of subjectsRaw) {
+      const subjectKey = normalizeSubjectKey(raw?.subject_key);
+      if (!subjectKey) continue;
+      if (!dedupedSubjects.has(subjectKey)) {
+        dedupedSubjects.set(subjectKey, {
+          subject_key: subjectKey,
+          subject_name: raw?.subject_name ? String(raw.subject_name) : null,
+          exam_board: raw?.exam_board ? String(raw.exam_board) : null,
+          qualification_type: raw?.qualification_type ? String(raw.qualification_type) : null,
+        });
+      }
+    }
+    const subjects: SubjectSelection[] = Array.from(dedupedSubjects.values());
 
     if (subjects.length > MAX_SUBJECTS) {
       return json(400, { ok: false, error: "SUBJECT_LIMIT_REACHED" });

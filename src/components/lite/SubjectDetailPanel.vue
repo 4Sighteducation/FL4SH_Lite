@@ -16,6 +16,8 @@ const props = defineProps({
   selectedSubjectMeta: { type: Function, required: true },
   getSubjectColor: { type: Function, required: true },
   shortLine: { type: Function, required: true },
+  isCardDue: { type: Function, required: true },
+  formatDate: { type: Function, required: true },
   manualTopic: { type: String, required: true },
   manualFront: { type: String, required: true },
   manualBack: { type: String, required: true },
@@ -171,6 +173,9 @@ function onAiCountInput(event) {
       <article class="card" v-for="c in props.filteredCards" :key="c.id" @click="emit('open-card-modal', c)">
         <h4>{{ c.front_text }}</h4>
         <small class="muted" v-if="c.topic_code">Topic: {{ c.topic_code }}</small>
+        <small :class="props.isCardDue(c) ? 'due-tag' : 'scheduled-tag'">
+          {{ props.isCardDue(c) ? 'Due now' : `Next due ${props.formatDate(c.next_review_at)}` }}
+        </small>
         <p>{{ props.shortLine(c.back_text, 160) }}</p>
         <div class="card-actions">
           <span>Box {{ c.box_number || 1 }}</span>

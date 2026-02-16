@@ -54,10 +54,20 @@ export function useLiteComputed({
   })
 
   const filteredCards = computed(() => {
-    return state.cards.filter((c) => {
+    const now = Date.now()
+    const cards = state.cards.filter((c) => {
       const topicOk = !activeTopicFilter.value || String(c.topic_code || '') === activeTopicFilter.value
       const boxOk = !activeBoxFilter.value || cardBox(c) === activeBoxFilter.value
       return topicOk && boxOk
+    })
+    return [...cards].sort((a, b) => {
+      const aDueAt = a?.next_review_at ? new Date(a.next_review_at).getTime() : 0
+      const bDueAt = b?.next_review_at ? new Date(b.next_review_at).getTime() : 0
+      const aDue = !aDueAt || aDueAt <= now
+      const bDue = !bDueAt || bDueAt <= now
+      if (aDue !== bDue) return aDue ? -1 : 1
+      if (aDueAt !== bDueAt) return aDueAt - bDueAt
+      return String(a?.front_text || '').localeCompare(String(b?.front_text || ''))
     })
   })
 
