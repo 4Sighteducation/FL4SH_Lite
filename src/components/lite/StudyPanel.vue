@@ -9,6 +9,8 @@ const props = defineProps({
   sessionDone: { type: Boolean, required: true },
   dueCardsLength: { type: Number, required: true },
   sessionReviewed: { type: Number, required: true },
+  sessionTotalDue: { type: Number, required: true },
+  progressPercent: { type: Number, required: true },
   activeStudyCard: { type: Object, default: null },
   revealAnswer: { type: Boolean, required: true },
   links: { type: Object, required: true },
@@ -45,6 +47,15 @@ const emit = defineEmits(['back-to-subject', 'set-reveal-answer', 'apply-study-g
           </div>
           <div v-if="props.pulseBox === b.box && props.movingCardText" class="box-fly-chip">+ {{ props.movingCardText }}</div>
         </article>
+      </div>
+    </div>
+    <div class="study-progress-shell">
+      <div class="study-progress-head">
+        <small>Session progress</small>
+        <small>{{ props.sessionReviewed }}/{{ props.sessionTotalDue || props.sessionReviewed }}</small>
+      </div>
+      <div class="study-progress-track">
+        <div class="study-progress-fill" :style="{ width: `${props.progressPercent}%` }"></div>
       </div>
     </div>
     <p class="muted" v-if="!props.sessionDone">Due cards left: {{ props.dueCardsLength }} · Reviewed this session: {{ props.sessionReviewed }}</p>

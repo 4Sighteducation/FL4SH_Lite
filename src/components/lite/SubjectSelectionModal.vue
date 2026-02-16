@@ -26,6 +26,11 @@ function onLevelChange(event) {
 function onSearchInput(event) {
   emit('update:modalSearch', event?.target?.value || '')
 }
+
+function isSubjectLocked(subjectKey) {
+  if (props.subjectDraft.includes(subjectKey)) return false
+  return props.subjectDraft.length >= props.maxSubjects
+}
 </script>
 
 <template>
@@ -46,7 +51,8 @@ function onSearchInput(event) {
           v-for="subject in props.filteredModalSubjects"
           :key="`modal-${subject.subject_key}`"
           class="subject-item picker"
-          :class="{ active: props.subjectDraft.includes(subject.subject_key) }"
+          :class="{ active: props.subjectDraft.includes(subject.subject_key), locked: isSubjectLocked(subject.subject_key) }"
+          :disabled="isSubjectLocked(subject.subject_key)"
           @click="emit('toggle-subject', subject.subject_key)"
         >
           <div>

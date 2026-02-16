@@ -16,6 +16,7 @@ export function createInitialState() {
     upsellMessage: '',
     studyIndex: 0,
     sessionReviewed: 0,
+    sessionTotalDue: 0,
     revealAnswer: false,
     sessionDone: false,
     catalogWarning: '',

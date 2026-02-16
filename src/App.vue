@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { LINKS, callFn } from './lib/api'
 import CardDetailModal from './components/lite/CardDetailModal.vue'
 import LiteHeader from './components/lite/LiteHeader.vue'
@@ -89,6 +89,14 @@ function setSubjectColor(subjectKey, color) {
 function setSubjectColorFromSidebar(payload) {
   setSubjectColor(payload?.subjectKey, payload?.color)
 }
+const dueCountInSubject = computed(() => state.cards.filter((card) => isCardDue(card)).length)
+const masteredCountInSubject = computed(() => state.cards.filter((card) => Number(card?.box_number || 1) === 5).length)
+const studyProgressPercent = computed(() => {
+  const total = Number(state.sessionTotalDue || 0)
+  if (total <= 0) return state.sessionDone ? 100 : 0
+  const value = Math.round((state.sessionReviewed / total) * 100)
+  return Math.max(0, Math.min(100, value))
+})
 
 async function trackEventSafe(eventType, placement, payload = {}) {
   try {
@@ -432,8 +440,10 @@ async function deleteCard(cardId) {
 }
 
 function startStudy() {
+  const dueTotal = dueCards.value.length
   state.studyIndex = 0
   state.sessionReviewed = 0
+  state.sessionTotalDue = dueTotal
   state.sessionDone = false
   state.revealAnswer = false
   view.value = 'study'
@@ -499,6 +509,8 @@ onMounted(loadContext)
         :ai-count="aiCount"
         :busy="state.busy"
         :filtered-cards="filteredCards"
+        :due-count="dueCountInSubject"
+        :mastered-count="masteredCountInSubject"
         @start-study="startStudy"
         @back-home="view = 'home'"
         @set-active-box-filter="activeBoxFilter = $event"
@@ -526,6 +538,8 @@ onMounted(loadContext)
         :session-done="state.sessionDone"
         :due-cards-length="dueCards.length"
         :session-reviewed="state.sessionReviewed"
+        :session-total-due="state.sessionTotalDue"
+        :progress-percent="studyProgressPercent"
         :active-study-card="activeStudyCard"
         :reveal-answer="state.revealAnswer"
         :links="LINKS"

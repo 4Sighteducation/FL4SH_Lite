@@ -63,8 +63,32 @@ function qualificationMatches(candidate: string | null | undefined, requested: s
   return c === r || c.includes(r) || r.includes(c);
 }
 
+function finalizeCatalogRows(rows: any[], requestedQualification: string) {
+  const deduped = new Map<string, any>();
+  for (const row of rows || []) {
+    const subjectKey = String(row?.subject_key || "").trim();
+    const subjectName = String(row?.subject_name || "").trim();
+    if (!subjectKey || !subjectName) continue;
+    if (!qualificationMatches(row?.qualification_type, requestedQualification)) continue;
+    if (!deduped.has(subjectKey)) {
+      deduped.set(subjectKey, {
+        subject_key: subjectKey,
+        subject_name: subjectName,
+        exam_board: String(row?.exam_board || "").trim(),
+        qualification_type: String(row?.qualification_type || "").trim(),
+      });
+    }
+  }
+  return Array.from(deduped.values()).sort((a: any, b: any) =>
+    String(a.subject_name || "").localeCompare(String(b.subject_name || "")) ||
+    String(a.exam_board || "").localeCompare(String(b.exam_board || "")) ||
+    String(a.qualification_type || "").localeCompare(String(b.qualification_type || ""))
+  );
+}
+
 function mapProductionCatalogRows(rows: any[], requestedQualification: string) {
-  return rows
+  return finalizeCatalogRows(
+    rows
     .map((r: any) => {
       const examBoard = r?.exam_boards?.code || r?.exam_boards?.full_name || "";
       const qualification = r?.qualification_types?.code || "";
@@ -76,25 +100,24 @@ function mapProductionCatalogRows(rows: any[], requestedQualification: string) {
         exam_board: examBoard,
         qualification_type: qualification,
       };
-    })
-    .filter((r: any) => r.subject_key && r.subject_name)
-    .filter((r: any) => qualificationMatches(r.qualification_type, requestedQualification));
+    }),
+    requestedQualification,
+  );
 }
 
 async function fetchCatalogRows(curriculumClient: any, qualificationLevel?: string | null) {
   if (!curriculumClient) return [];
   const source = Deno.env.get("CURRICULUM_CATALOG_SOURCE") || "fl4sh_lite_subject_catalog";
-  const maxRows = Number(Deno.env.get("CURRICULUM_CATALOG_LIMIT") || "500");
+  const maxRows = Number(Deno.env.get("CURRICULUM_CATALOG_LIMIT") || "2500");
+  const effectiveLimit = Number.isFinite(maxRows) ? Math.max(500, maxRows) : 2500;
   let query = curriculumClient
     .from(source)
     .select("subject_key,subject_name,exam_board,qualification_type")
-    .limit(Number.isFinite(maxRows) ? maxRows : 500);
+    .limit(effectiveLimit);
   const normalized = normalizeQualification(qualificationLevel ?? null);
   const { data, error } = await query;
   if (!error) {
-    return (data || [])
-      .filter((r: any) => r?.subject_key)
-      .filter((r: any) => qualificationMatches(r?.qualification_type, normalized));
+    return finalizeCatalogRows(data || [], normalized);
   }
 
   // Fallback: align with FLASH production schema
@@ -108,7 +131,7 @@ async function fetchCatalogRows(curriculumClient: any, qualificationLevel?: stri
       qualification_types(code)
     `)
     .eq("is_current", true)
-    .limit(Number.isFinite(maxRows) ? maxRows : 500);
+    .limit(effectiveLimit);
 
   if (prodError) {
     throw new Error(`Catalog query failed: ${error.message}; production fallback failed: ${prodError.message}`);
@@ -143,7 +166,8 @@ serve(async (req: Request) => {
       ? catalog.filter((r) =>
         String(r.subject_name || "").toLowerCase().includes(q) ||
         String(r.subject_key || "").toLowerCase().includes(q) ||
-        String(r.exam_board || "").toLowerCase().includes(q))
+        String(r.exam_board || "").toLowerCase().includes(q) ||
+        String(r.qualification_type || "").toLowerCase().includes(q))
       : catalog;
 
     return json(200, {

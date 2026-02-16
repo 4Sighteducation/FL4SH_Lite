@@ -24,6 +24,8 @@ const props = defineProps({
   aiCount: { type: Number, required: true },
   busy: { type: Boolean, required: true },
   filteredCards: { type: Array, required: true },
+  dueCount: { type: Number, required: true },
+  masteredCount: { type: Number, required: true },
 })
 
 const emit = defineEmits([
@@ -74,6 +76,11 @@ function onAiCountInput(event) {
       </div>
     </div>
     <div class="muted">{{ props.selectedSubjectMeta() }}</div>
+    <div class="stat-chip-row">
+      <span class="stat-chip">Cards: {{ props.cards.length }}</span>
+      <span class="stat-chip">Due now: {{ props.dueCount }}</span>
+      <span class="stat-chip">Mastered: {{ props.masteredCount }}</span>
+    </div>
     <div class="leitner-wrap">
       <div class="leitner-head">
         <h3>Leitner Boxes</h3>
