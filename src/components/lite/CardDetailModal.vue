@@ -8,6 +8,9 @@ const props = defineProps({
   selectedSubjectMeta: { type: Function, required: true },
   cardModalBackSummary: { type: Function, required: true },
   formatDateTime: { type: Function, required: true },
+  canPrevCard: { type: Boolean, required: true },
+  canNextCard: { type: Boolean, required: true },
+  sequenceLabel: { type: String, required: true },
 })
 
 const emit = defineEmits([
@@ -16,6 +19,8 @@ const emit = defineEmits([
   'toggle-details',
   'choose-option',
   'review',
+  'prev-card',
+  'next-card',
 ])
 </script>
 
@@ -33,6 +38,7 @@ const emit = defineEmits([
         </span>
         <span class="mini-chip">Topic: {{ props.cardModal.card?.topic_code || 'General' }}</span>
         <span class="mini-chip">{{ props.selectedSubjectMeta() }}</span>
+        <span class="mini-chip" v-if="props.sequenceLabel">{{ props.sequenceLabel }}</span>
       </div>
       <div class="flip-shell" :class="{ flipped: props.cardModal.flipped }">
         <article class="flip-face front">
@@ -67,6 +73,8 @@ const emit = defineEmits([
         </small>
       </div>
       <div class="toolbar">
+        <button class="mini-btn" :disabled="!props.canPrevCard" @click="emit('prev-card')">Prev</button>
+        <button class="mini-btn" :disabled="!props.canNextCard" @click="emit('next-card')">Next</button>
         <button class="btn ghost" @click="emit('toggle-flip')">{{ props.cardModal.flipped ? 'Show question' : 'Flip card' }}</button>
         <button class="btn ghost" @click="emit('toggle-details')">{{ props.cardModal.showDetails ? 'Hide details' : 'View details' }}</button>
         <button class="btn ghost" :disabled="props.busy || !props.isCardDue(props.cardModal.card)" @click="emit('review', false)">Not quite</button>

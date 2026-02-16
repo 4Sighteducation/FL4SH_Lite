@@ -356,6 +356,13 @@ h2, h3, h4 { margin: 0 0 8px; }
   background: #111b3d;
   padding: 10px;
 }
+.section-shell {
+  margin-top: 10px;
+  border: 1px solid #2b4778;
+  border-radius: 12px;
+  background: rgba(16, 27, 60, 0.62);
+  padding: 10px;
+}
 textarea, input, select {
   width: 100%;
   border-radius: 8px;

@@ -59,6 +59,8 @@ const subjectColors = ref({})
 const topicTree = ref([])
 const expandedTopics = ref({})
 const cardModal = reactive(createInitialCardModal())
+const topicModalCardIds = ref([])
+const topicModalIndex = ref(0)
 const {
   selectedSubject,
   dueCards,
@@ -80,6 +82,20 @@ const {
   expandedTopics,
 })
 
+function dedupeSubjects(subjects) {
+  const byKey = new Map()
+  ;(Array.isArray(subjects) ? subjects : []).forEach((subject) => {
+    const key = String(subject?.subject_key || '').trim()
+    if (!key) return
+    if (!byKey.has(key)) byKey.set(key, subject)
+  })
+  return [...byKey.values()]
+}
+
+function uniqueKeys(values) {
+  return [...new Set((Array.isArray(values) ? values : []).map((v) => String(v || '').trim()).filter(Boolean))]
+}
+
 function getSubjectColor(subjectKey) {
   return readSubjectColor(subjectColors.value, subjectKey)
 }
@@ -93,6 +109,15 @@ function setSubjectColorFromSidebar(payload) {
 const dueCountInSubject = computed(() => state.cards.filter((card) => isCardDue(card)).length)
 const masteredCountInSubject = computed(() => state.cards.filter((card) => Number(card?.box_number || 1) === 5).length)
 const hasActiveFilters = computed(() => Boolean(activeTopicFilter.value || activeBoxFilter.value))
+const canPrevModalCard = computed(() => topicModalCardIds.value.length > 1 && topicModalIndex.value > 0)
+const canNextModalCard = computed(
+  () => topicModalCardIds.value.length > 1 && topicModalIndex.value < topicModalCardIds.value.length - 1
+)
+const modalSequenceLabel = computed(() => {
+  const total = topicModalCardIds.value.length
+  if (total <= 1) return ''
+  return `${topicModalIndex.value + 1} of ${total}`
+})
 const studyProgressPercent = computed(() => {
   const total = Number(state.sessionTotalDue || 0)
   if (total <= 0) return state.sessionDone ? 100 : 0
@@ -170,7 +195,7 @@ function onStudyStoreClick(channel) {
   trackEventSafe('study_store_click', state.sessionDone ? 'study_complete' : 'study_empty', { channel })
 }
 function openSubjectModal() {
-  subjectDraft.value = state.selectedSubjects.map((s) => s.subject_key)
+  subjectDraft.value = uniqueKeys(state.selectedSubjects.map((s) => s.subject_key))
   modalSearch.value = ''
   modalLevel.value = examLevelChoices[0]?.label || ''
   state.showSubjectModal = true
@@ -233,9 +258,9 @@ async function loadContext() {
     state.limits = data.limits || state.limits
     state.availableSubjects = Array.isArray(data.available_subjects) ? data.available_subjects : []
     state.catalogWarning = String(data.catalog_warning || '')
-    state.selectedSubjects = Array.isArray(data.selected_subjects) ? data.selected_subjects : []
+    state.selectedSubjects = dedupeSubjects(data.selected_subjects)
     subjectColors.value = loadSubjectColors(state.user?.email)
-    subjectDraft.value = state.selectedSubjects.map((s) => s.subject_key)
+    subjectDraft.value = uniqueKeys(state.selectedSubjects.map((s) => s.subject_key))
     if (!state.selectedSubjectKey && state.selectedSubjects[0]) state.selectedSubjectKey = state.selectedSubjects[0].subject_key
     if (!state.selectedSubjects.length) state.showSubjectModal = true
     await loadCards()
@@ -255,9 +280,9 @@ async function loadCards() {
     const data = await listLiteCards(callFn, state.selectedSubjectKey)
     state.cards = Array.isArray(data.cards) ? data.cards : []
     if (Array.isArray(data.stats) && data.stats[0]) {
-      state.selectedSubjects = state.selectedSubjects.map((s) =>
+      state.selectedSubjects = dedupeSubjects(state.selectedSubjects.map((s) =>
         s.subject_key === state.selectedSubjectKey ? { ...s, ...data.stats[0] } : s
-      )
+      ))
     }
     await loadTopicTree()
   } catch (e) {
@@ -287,11 +312,13 @@ async function saveSubjects() {
   clearError()
   state.busy = true
   try {
-    if (subjectDraft.value.length > state.limits.max_subjects) {
+    const draftKeys = uniqueKeys(subjectDraft.value)
+    subjectDraft.value = draftKeys
+    if (draftKeys.length > state.limits.max_subjects) {
       throw new Error(`Select up to ${state.limits.max_subjects} subjects only.`)
     }
     const subjects = state.availableSubjects
-      .filter((s) => subjectDraft.value.includes(s.subject_key))
+      .filter((s) => draftKeys.includes(s.subject_key))
       .map((s) => ({
         subject_key: s.subject_key,
         subject_name: s.subject_name,
@@ -299,7 +326,7 @@ async function saveSubjects() {
         qualification_type: s.qualification_type,
       }))
     const data = await saveLiteSubjects(callFn, subjects)
-    state.selectedSubjects = Array.isArray(data.selected_subjects) ? data.selected_subjects : []
+    state.selectedSubjects = dedupeSubjects(data.selected_subjects)
     if (!state.selectedSubjects.some((s) => s.subject_key === state.selectedSubjectKey)) {
       state.selectedSubjectKey = state.selectedSubjects[0]?.subject_key || ''
     }
@@ -326,8 +353,10 @@ function toggleTopicRow(row) {
   activeTopicFilter.value = row.topic_code
   manualTopic.value = row.topic_code
   aiTopic.value = row.topic_code
+  openTopicCards(row.topic_code, row.label || row.topic_code || 'this topic')
 }
 function openCardModal(card) {
+  if (!card) return
   const mcq = parseMcq(card)
   cardModal.open = true
   cardModal.flipped = false
@@ -338,8 +367,59 @@ function openCardModal(card) {
   cardModal.selectedOption = ''
   cardModal.selectedCorrect = null
 }
+
+function sortedCardsForTopic(topicCode) {
+  const now = Date.now()
+  return state.cards
+    .filter((card) => String(card?.topic_code || '') === String(topicCode || ''))
+    .sort((a, b) => {
+      const aDueAt = a?.next_review_at ? new Date(a.next_review_at).getTime() : 0
+      const bDueAt = b?.next_review_at ? new Date(b.next_review_at).getTime() : 0
+      const aDue = !aDueAt || aDueAt <= now
+      const bDue = !bDueAt || bDueAt <= now
+      if (aDue !== bDue) return aDue ? -1 : 1
+      if (aDueAt !== bDueAt) return aDueAt - bDueAt
+      return String(a?.front_text || '').localeCompare(String(b?.front_text || ''))
+    })
+}
+
+function openTopicCards(topicCode, label = 'this topic') {
+  const cardsForTopic = sortedCardsForTopic(topicCode)
+  if (!cardsForTopic.length) {
+    state.error = `No cards saved yet for ${label}. Add or generate cards first.`
+    return
+  }
+  clearError()
+  topicModalCardIds.value = cardsForTopic.map((card) => card.id)
+  topicModalIndex.value = 0
+  openCardModal(cardsForTopic[0])
+}
+
+function openModalCardByIndex(nextIndex) {
+  const ids = topicModalCardIds.value
+  if (!ids.length) return
+  const index = Math.max(0, Math.min(ids.length - 1, nextIndex))
+  const targetId = ids[index]
+  const targetCard = state.cards.find((card) => card.id === targetId)
+  if (!targetCard) return
+  topicModalIndex.value = index
+  openCardModal(targetCard)
+}
+
+function openPrevModalCard() {
+  if (!canPrevModalCard.value) return
+  openModalCardByIndex(topicModalIndex.value - 1)
+}
+
+function openNextModalCard() {
+  if (!canNextModalCard.value) return
+  openModalCardByIndex(topicModalIndex.value + 1)
+}
+
 function closeCardModal() {
   cardModal.open = false
+  topicModalCardIds.value = []
+  topicModalIndex.value = 0
 }
 function chooseMcqOption(optionKey) {
   if (cardModal.selectedOption) return
@@ -605,11 +685,16 @@ onMounted(loadContext)
       :selected-subject-meta="selectedSubjectMeta"
       :card-modal-back-summary="cardModalBackSummary"
       :format-date-time="formatDateTime"
+      :can-prev-card="canPrevModalCard"
+      :can-next-card="canNextModalCard"
+      :sequence-label="modalSequenceLabel"
       @close="closeCardModal"
       @toggle-flip="cardModal.flipped = !cardModal.flipped"
       @toggle-details="cardModal.showDetails = !cardModal.showDetails"
       @choose-option="chooseMcqOption"
       @review="reviewFromModal"
+      @prev-card="openPrevModalCard"
+      @next-card="openNextModalCard"
     />
   </div>
 </template>
