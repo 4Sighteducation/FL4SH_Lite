@@ -101,19 +101,24 @@ function onAiCountInput(event) {
       <small class="muted">Select a topic and cards open in the modal viewer.</small>
       <div v-if="props.topicTreeLoading" class="muted">Loading topic tree...</div>
       <div v-else-if="props.topicTreeError" class="muted">{{ props.topicTreeError }}</div>
-      <div class="topic-strip">
-        <button class="topic-pill" :class="{ active: !props.activeTopicFilter }" @click="emit('set-active-topic-filter', '')">All topics</button>
+      <div class="topic-tree-list">
+        <button class="topic-row all" :class="{ active: !props.activeTopicFilter }" @click="emit('set-active-topic-filter', '')">
+          <span>All topics</span>
+          <strong>{{ props.cards.length }}</strong>
+        </button>
         <button
           v-for="row in props.topicRows"
           :key="row.id"
-          class="topic-pill"
-          :class="{ active: props.activeTopicFilter === row.topic_code, topicNode: true }"
-          :style="{ marginLeft: `${row.depth * 12}px`, borderColor: props.getSubjectColor(props.selectedSubjectKey) }"
+          class="topic-row"
+          :class="{ active: props.activeTopicFilter === row.topic_code }"
+          :style="{ marginLeft: `${row.depth * 12}px`, borderLeftColor: props.getSubjectColor(props.selectedSubjectKey) }"
           @click="emit('toggle-topic-row', row)"
         >
-          <span v-if="row.hasChildren">{{ props.expandedTopics[row.id] ? '▾' : '▸' }}</span>
-          {{ row.label }}
-          <em v-if="row.count">({{ row.count }})</em>
+          <span class="topic-label">
+            <span v-if="row.hasChildren">{{ props.expandedTopics[row.id] ? '▾' : '▸' }}</span>
+            {{ row.label }}
+          </span>
+          <strong>{{ row.count || 0 }}</strong>
         </button>
       </div>
     </div>

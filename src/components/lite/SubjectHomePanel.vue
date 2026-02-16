@@ -43,6 +43,7 @@ function cardsRemaining(subject) {
         @click="emit('open-subject', s.subject_key)"
         :style="{ borderColor: props.getSubjectColor(s.subject_key), boxShadow: `0 0 14px ${props.getSubjectColor(s.subject_key)}33` }"
       >
+        <span class="subject-notice-badge">{{ s.card_count || 0 }}</span>
         <h3>{{ s.subject_name }}</h3>
         <p class="subject-meta">{{ s.exam_board }} · {{ s.qualification_type }}</p>
         <small class="subject-count">{{ s.card_count || 0 }} saved cards</small>

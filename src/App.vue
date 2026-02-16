@@ -108,6 +108,7 @@ function setSubjectColorFromSidebar(payload) {
 }
 const dueCountInSubject = computed(() => state.cards.filter((card) => isCardDue(card)).length)
 const masteredCountInSubject = computed(() => state.cards.filter((card) => Number(card?.box_number || 1) === 5).length)
+const totalCardsInSubject = computed(() => state.cards.length)
 const hasActiveFilters = computed(() => Boolean(activeTopicFilter.value || activeBoxFilter.value))
 const canPrevModalCard = computed(() => topicModalCardIds.value.length > 1 && topicModalIndex.value > 0)
 const canNextModalCard = computed(
@@ -240,6 +241,10 @@ async function applyStudyGrade(correct) {
       movingCardText.value = ''
     }, 900)
     state.revealAnswer = false
+    state.lastStudyOutcome = correct ? 'correct' : 'incorrect'
+    window.setTimeout(() => {
+      state.lastStudyOutcome = ''
+    }, 1200)
     state.sessionReviewed += 1
     if (dueCards.value.length === 0) state.sessionDone = true
   } catch (e) {
@@ -247,6 +252,11 @@ async function applyStudyGrade(correct) {
   } finally {
     state.busy = false
   }
+}
+
+function backToSubjectFromStudy() {
+  state.studyStarted = false
+  view.value = 'subject'
 }
 
 async function loadContext() {
@@ -531,11 +541,20 @@ async function deleteCard(cardId) {
 function startStudy() {
   const dueTotal = dueCards.value.length
   state.studyIndex = 0
+  state.studyStarted = false
   state.sessionReviewed = 0
   state.sessionTotalDue = dueTotal
+  state.lastStudyOutcome = ''
   state.sessionDone = false
   state.revealAnswer = false
   view.value = 'study'
+}
+
+function beginStudySession() {
+  if (dueCards.value.length <= 0) return
+  state.studyStarted = true
+  state.revealAnswer = false
+  state.lastStudyOutcome = ''
 }
 
 onMounted(loadContext)
@@ -635,15 +654,20 @@ onMounted(loadContext)
         :pulse-box="pulseBox"
         :moving-card-text="movingCardText"
         :short-line="shortLine"
+        :parse-mcq="parseMcq"
         :session-done="state.sessionDone"
+        :session-started="state.studyStarted"
         :due-cards-length="dueCards.length"
+        :total-cards-length="totalCardsInSubject"
         :session-reviewed="state.sessionReviewed"
         :session-total-due="state.sessionTotalDue"
         :progress-percent="studyProgressPercent"
+        :last-outcome="state.lastStudyOutcome"
         :active-study-card="activeStudyCard"
         :reveal-answer="state.revealAnswer"
         :links="LINKS"
-        @back-to-subject="view = 'subject'"
+        @back-to-subject="backToSubjectFromStudy"
+        @begin-session="beginStudySession"
         @set-reveal-answer="state.revealAnswer = $event"
         @apply-study-grade="applyStudyGrade"
         @store-click="onStudyStoreClick"

@@ -71,7 +71,55 @@ async function upsertLiteUser(db: any, identity: any) {
   return data;
 }
 
-function toBackText(card: any): string {
+function normalizeMcqOptions(card: any): Array<{ key: string; text: string }> {
+  const raw = Array.isArray(card?.options) ? card.options : [];
+  const mapped = raw
+    .map((opt: any, index: number) => {
+      const key = String.fromCharCode(65 + index); // A, B, C, D...
+      if (typeof opt === "string") {
+        const text = opt.trim();
+        return text ? { key, text } : null;
+      }
+      if (opt && typeof opt === "object") {
+        const text = String(opt.text || opt.option || opt.label || "").trim();
+        return text ? { key, text } : null;
+      }
+      return null;
+    })
+    .filter(Boolean) as Array<{ key: string; text: string }>;
+  return mapped.slice(0, 6);
+}
+
+function resolveCorrectKey(card: any, options: Array<{ key: string; text: string }>): string {
+  const raw = String(card?.correctAnswer || card?.correct_answer || "").trim();
+  if (!raw || !options.length) return "";
+  const upper = raw.toUpperCase();
+  if (/^[A-F]$/.test(upper)) return upper;
+  const byText = options.find((opt) => opt.text.toLowerCase() === raw.toLowerCase());
+  return byText?.key || "";
+}
+
+function mcqBackText(card: any): string {
+  const options = normalizeMcqOptions(card);
+  const correctKey = resolveCorrectKey(card, options);
+  if (!options.length) return "";
+  const lines = options.map((opt) => `${opt.key}) ${opt.text}`);
+  if (correctKey) lines.push(`Correct answer: ${correctKey}`);
+  if (typeof card?.detailedAnswer === "string" && card.detailedAnswer.trim()) {
+    lines.push("");
+    lines.push(card.detailedAnswer.trim());
+  } else if (typeof card?.answer === "string" && card.answer.trim()) {
+    lines.push("");
+    lines.push(card.answer.trim());
+  }
+  return lines.join("\n");
+}
+
+function toBackText(card: any, questionType: string): string {
+  if (questionType === "multiple_choice") {
+    const mcq = mcqBackText(card);
+    if (mcq) return mcq;
+  }
   if (typeof card?.detailedAnswer === "string" && card.detailedAnswer.trim()) return card.detailedAnswer.trim();
   if (typeof card?.answer === "string" && card.answer.trim()) return card.answer.trim();
   if (Array.isArray(card?.keyPoints) && card.keyPoints.length) {
@@ -165,7 +213,7 @@ serve(async (req: Request) => {
       subject_key: subjectKey,
       topic_code: String(payload.topic_code || topic || "").slice(0, 120) || null,
       front_text: String(c?.question || "").trim(),
-      back_text: toBackText(c),
+      back_text: toBackText(c, questionType),
       card_type: questionType,
     })).filter((r: any) => r.front_text && r.back_text);
 
