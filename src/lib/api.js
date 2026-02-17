@@ -12,6 +12,7 @@ export const LINKS = {
   appStore: 'https://apps.apple.com/in/app/fl4sh-study-smarter/id6747457678',
   playStore: 'https://play.google.com/store/apps/details?id=com.foursighteducation.flash&pcampaignid=web_share',
   website: 'https://www.fl4shcards.com',
+  legacyKnackFlashcards: 'https://vespaacademy.knack.com/vespa-academy#flashcards/',
 }
 
 function getFnUrl(name) {

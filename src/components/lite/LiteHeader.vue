@@ -37,6 +37,13 @@ const emit = defineEmits(['store-click', 'website-click'])
     <div class="notice-foot">
       <strong>Lite limits:</strong> {{ props.limits.max_subjects }} subjects · {{ props.limits.max_cards_per_subject }} AI cards per subject (manual unlimited). ·
       <a :href="props.links.website" target="_blank" rel="noopener" @click="emit('website-click', 'header_notice')">Upgrade to full FL4SH → fl4shcards.com</a>
+      ·
+      <a
+        :href="props.links.legacyKnackFlashcards"
+        target="_blank"
+        rel="noopener"
+        @click="emit('website-click', 'legacy_knack_flashcards')"
+      >Open your cards in legacy Knack version</a>
     </div>
   </section>
 </template>
