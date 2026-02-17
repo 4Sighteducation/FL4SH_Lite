@@ -36,6 +36,7 @@ import {
   saveSubjectColors,
   setSubjectColorValue,
 } from './features/lite/subjectColors'
+import { loadTopicPriorities, saveTopicPriorities, setTopicPriorityValue } from './features/lite/topicPriorities'
 
 const view = ref('home') // home | subject | study
 const state = reactive(createInitialState())
@@ -73,9 +74,20 @@ const previewFlippedByKey = ref({})
 const previewSelectionByKey = ref({})
 const previewMetaCard = ref(null)
 const previewIndex = ref(0)
+const aiProgress = ref(0)
+const aiProgressLabel = ref('')
+let aiProgressTimer = null
+const topicPriorities = ref({})
 const cardBankOpen = ref(false)
-const cardBankSearch = ref('')
-const cardBankBox = ref(0)
+const cardBankSubjectKey = ref('')
+const cardBankCardsBySubject = ref({})
+const cardBankLoading = ref(false)
+const cardBankError = ref('')
+const cardBankIndex = ref(0)
+const cardBankFlipped = ref(false)
+const cardBankSelectedOption = ref('')
+const cardBankSelectedCorrect = ref(null)
+const cardBankMetaOpen = ref(false)
 const {
   selectedSubject,
   dueCards,
@@ -117,6 +129,13 @@ function getSubjectColor(subjectKey) {
 function setSubjectColor(subjectKey, color) {
   subjectColors.value = setSubjectColorValue(subjectColors.value, subjectKey, color)
   saveSubjectColors(state.user?.email, subjectColors.value)
+}
+function setTopicPriority(payload) {
+  const topicCode = String(payload?.topic_code || payload?.topicCode || '').trim()
+  const priority = Number(payload?.priority || 0)
+  if (!topicCode || !state.selectedSubjectKey) return
+  topicPriorities.value = setTopicPriorityValue(topicPriorities.value, topicCode, priority)
+  saveTopicPriorities(state.user?.email, state.selectedSubjectKey, topicPriorities.value)
 }
 function setSubjectColorFromSidebar(payload) {
   setSubjectColor(payload?.subjectKey, payload?.color)
@@ -350,6 +369,7 @@ async function loadCards() {
       ))
     }
     await loadTopicTree()
+    topicPriorities.value = loadTopicPriorities(state.user?.email, state.selectedSubjectKey)
   } catch (e) {
     handleLiteError(e, 'Failed to load cards.', 'cards_list')
   }
@@ -514,6 +534,17 @@ async function generatePreviewCards() {
     return
   }
   state.busy = true
+  aiProgress.value = 0
+  aiProgressLabel.value = 'Starting…'
+  if (aiProgressTimer) window.clearInterval(aiProgressTimer)
+  aiProgressTimer = window.setInterval(() => {
+    // Simulated progress so the UI feels alive.
+    aiProgress.value = Math.min(95, Number(aiProgress.value || 0) + (aiProgress.value < 70 ? 7 : 3))
+    if (aiProgress.value < 25) aiProgressLabel.value = 'Preparing prompt…'
+    else if (aiProgress.value < 55) aiProgressLabel.value = 'Generating cards…'
+    else if (aiProgress.value < 80) aiProgressLabel.value = 'Formatting answers…'
+    else aiProgressLabel.value = 'Finalising…'
+  }, 420)
   try {
     const data = await generateLiteCards(callFn, {
       subject_key: state.selectedSubjectKey,
@@ -527,6 +558,8 @@ async function generatePreviewCards() {
       contentGuidance: aiGuidance.value || '',
       preview_only: true,
     })
+    aiProgress.value = 100
+    aiProgressLabel.value = 'Done'
     aiPreviewCards.value = Array.isArray(data.preview_cards) ? data.preview_cards : []
     previewFlippedByKey.value = {}
     previewSelectionByKey.value = {}
@@ -541,6 +574,12 @@ async function generatePreviewCards() {
     handleLiteError(e, 'Could not generate preview cards.', 'ai_generate')
   } finally {
     state.busy = false
+    if (aiProgressTimer) window.clearInterval(aiProgressTimer)
+    aiProgressTimer = null
+    window.setTimeout(() => {
+      aiProgress.value = 0
+      aiProgressLabel.value = ''
+    }, 800)
   }
 }
 
@@ -690,31 +729,99 @@ function openCardModal(card) {
   cardModal.selectedCorrect = null
 }
 
-function openCardBank() {
-  cardBankSearch.value = ''
-  cardBankBox.value = 0
+async function ensureCardBankCards(subjectKey) {
+  const key = String(subjectKey || '').trim()
+  if (!key) return
+  if (cardBankCardsBySubject.value[key]) return
+  cardBankLoading.value = true
+  cardBankError.value = ''
+  try {
+    const data = await listLiteCards(callFn, key)
+    cardBankCardsBySubject.value = {
+      ...cardBankCardsBySubject.value,
+      [key]: Array.isArray(data.cards) ? data.cards : [],
+    }
+  } catch (e) {
+    cardBankError.value = e?.message || 'Could not load cards for Card Bank.'
+  } finally {
+    cardBankLoading.value = false
+  }
+}
+
+async function openCardBank(subjectKey = '') {
+  const target = String(subjectKey || state.selectedSubjectKey || '').trim()
+  cardBankSubjectKey.value = target
+  cardBankIndex.value = 0
+  cardBankFlipped.value = false
+  cardBankSelectedOption.value = ''
+  cardBankSelectedCorrect.value = null
+  cardBankMetaOpen.value = false
   cardBankOpen.value = true
+  await ensureCardBankCards(target)
 }
 
 function closeCardBank() {
   cardBankOpen.value = false
-  cardBankSearch.value = ''
-  cardBankBox.value = 0
+  cardBankSubjectKey.value = ''
+  cardBankIndex.value = 0
+  cardBankFlipped.value = false
+  cardBankSelectedOption.value = ''
+  cardBankSelectedCorrect.value = null
+  cardBankMetaOpen.value = false
+  cardBankError.value = ''
 }
 
-const cardBankCards = computed(() => {
-  const q = cardBankSearch.value.trim().toLowerCase()
-  const box = Number(cardBankBox.value || 0)
-  return (state.cards || [])
-    .filter((c) => !box || Number(c?.box_number || 1) === box)
-    .filter((c) => !q || String(c?.front_text || '').toLowerCase().includes(q) || String(c?.topic_code || '').toLowerCase().includes(q))
-    .sort((a, b) => {
-      const aBox = Number(a?.box_number || 1)
-      const bBox = Number(b?.box_number || 1)
-      if (aBox !== bBox) return aBox - bBox
-      return String(a?.front_text || '').localeCompare(String(b?.front_text || ''))
-    })
+const activeCardBankCards = computed(() => {
+  const key = String(cardBankSubjectKey.value || '').trim()
+  const cards = cardBankCardsBySubject.value[key]
+  return Array.isArray(cards) ? cards : []
 })
+const activeCardBankCard = computed(() => activeCardBankCards.value[cardBankIndex.value] || null)
+const activeCardBankMcq = computed(() => parseMcq(activeCardBankCard.value || {}))
+const isCardBankMcq = computed(() => activeCardBankMcq.value.options.length > 0)
+
+function bankPrev() {
+  if (cardBankIndex.value <= 0) return
+  cardBankIndex.value -= 1
+  cardBankFlipped.value = false
+  cardBankSelectedOption.value = ''
+  cardBankSelectedCorrect.value = null
+}
+function bankNext() {
+  if (cardBankIndex.value >= activeCardBankCards.value.length - 1) return
+  cardBankIndex.value += 1
+  cardBankFlipped.value = false
+  cardBankSelectedOption.value = ''
+  cardBankSelectedCorrect.value = null
+}
+function bankToggleFlip() {
+  if (isCardBankMcq.value) return
+  cardBankFlipped.value = !cardBankFlipped.value
+}
+function bankChooseOption(key) {
+  if (!isCardBankMcq.value) return
+  if (cardBankSelectedOption.value) return
+  cardBankSelectedOption.value = key
+  const correct = String(activeCardBankMcq.value?.correct || '').toUpperCase()
+  cardBankSelectedCorrect.value = correct ? key === correct : null
+}
+function bankOpenMeta() {
+  cardBankMetaOpen.value = true
+}
+function bankCloseMeta() {
+  cardBankMetaOpen.value = false
+}
+async function bankSwitchSubject(subjectKey) {
+  const key = String(subjectKey || '').trim()
+  if (!key) return
+  cardBankSubjectKey.value = key
+  cardBankIndex.value = 0
+  cardBankFlipped.value = false
+  cardBankSelectedOption.value = ''
+  cardBankSelectedCorrect.value = null
+  cardBankMetaOpen.value = false
+  await ensureCardBankCards(key)
+}
 
 function sortedCardsForTopic(topicCode) {
   const now = Date.now()
@@ -945,6 +1052,7 @@ onMounted(loadContext)
         :topic-tree-loading="state.topicTreeLoading"
         :topic-tree-error="state.topicTreeError"
         :active-topic-filter="activeTopicFilter"
+        :topic-priorities="topicPriorities"
         :topic-tree="topicTree"
         :topic-rows="topicRows"
         :expanded-topics="expandedTopics"
@@ -961,6 +1069,7 @@ onMounted(loadContext)
         @toggle-topic-row="toggleTopicRow"
         @open-create-flow="openCreateFlow($event)"
         @open-card-bank="openCardBank"
+        @set-topic-priority="setTopicPriority"
       />
 
       <StudyPanel
@@ -994,36 +1103,117 @@ onMounted(loadContext)
     <div class="modal" v-if="cardBankOpen">
       <div class="modal-card neon create-flow-modal">
         <div class="panel-head">
-          <h3>Card Bank</h3>
+          <div>
+            <h3>Card Bank</h3>
+            <small class="muted">Revise cards in a slideshow (front ↔ back) with quick access to extra info.</small>
+          </div>
           <button class="mini-btn" @click="closeCardBank">Close</button>
         </div>
-        <p class="muted">Browse all cards in this subject. Click one to flip and view details.</p>
-        <div class="modal-search-row">
-          <input v-model="cardBankSearch" placeholder="Search cards or topics..." />
-          <select v-model="cardBankBox" style="width: 140px; margin-bottom: 0;">
-            <option :value="0">All boxes</option>
-            <option :value="1">Box 1</option>
-            <option :value="2">Box 2</option>
-            <option :value="3">Box 3</option>
-            <option :value="4">Box 4</option>
-            <option :value="5">Box 5</option>
-          </select>
-        </div>
-        <div class="cards">
+
+        <div class="toolbar" style="flex-wrap: wrap; justify-content: flex-start;">
           <button
-            v-for="card in cardBankCards"
-            :key="`bank-${card.id}`"
-            class="subject-item picker"
-            style="text-align:left;"
-            @click="openCardModal(card)"
+            v-for="s in state.selectedSubjects"
+            :key="`bank-subject-${s.subject_key}`"
+            class="mini-btn"
+            :class="{ active: cardBankSubjectKey === s.subject_key }"
+            @click="bankSwitchSubject(s.subject_key)"
           >
-            <div class="subject-name">{{ shortLine(card.front_text, 84) }}</div>
-            <div class="subject-meta">
-              Box {{ card.box_number || 1 }} · {{ card.topic_code || 'General' }} ·
-              <span :class="isCardDue(card) ? 'due-tag' : 'scheduled-tag'">{{ cardDueBadge(card) }}</span>
-            </div>
+            {{ s.subject_name }}
           </button>
-          <div v-if="!cardBankCards.length" class="muted">No cards match your filters yet.</div>
+        </div>
+
+        <div v-if="cardBankLoading" class="muted" style="padding: 8px 2px;">Loading cards…</div>
+        <div v-else-if="cardBankError" class="muted" style="padding: 8px 2px;">{{ cardBankError }}</div>
+        <div v-else-if="!activeCardBankCards.length" class="muted" style="padding: 8px 2px;">
+          No cards in this subject yet. Create some cards first, then come back here to revise.
+        </div>
+
+        <template v-else>
+          <div class="preview-header-row" style="margin-top: 10px;">
+            <span class="muted">{{ selectedSubjectMeta() }}</span>
+            <div class="toolbar">
+              <button class="mini-btn" :disabled="cardBankIndex <= 0" @click="bankPrev">‹</button>
+              <span class="mini-chip">{{ `${cardBankIndex + 1} / ${activeCardBankCards.length}` }}</span>
+              <button class="mini-btn" :disabled="cardBankIndex >= activeCardBankCards.length - 1" @click="bankNext">›</button>
+            </div>
+          </div>
+
+          <div class="preview-stage" v-if="activeCardBankCard">
+            <div class="preview-counter">{{ cardBankIndex + 1 }} / {{ activeCardBankCards.length }}</div>
+            <div class="box-pill" :class="`box-${activeCardBankCard.box_number || 1}`">
+              Box {{ activeCardBankCard.box_number || 1 }}
+            </div>
+
+            <div class="preview-body">
+              <div class="preview-question">{{ activeCardBankCard.front_text }}</div>
+
+              <div class="preview-options" v-if="isCardBankMcq">
+                <button
+                  v-for="opt in activeCardBankMcq.options"
+                  :key="`bank-opt-${activeCardBankCard.id}-${opt.key}`"
+                  class="preview-option"
+                  :class="{
+                    selected: cardBankSelectedOption === opt.key,
+                    correct: Boolean(cardBankSelectedOption) && opt.key === activeCardBankMcq.correct,
+                    wrong: Boolean(cardBankSelectedOption) && cardBankSelectedOption === opt.key && opt.key !== activeCardBankMcq.correct,
+                  }"
+                  @click="bankChooseOption(opt.key)"
+                >
+                  <span class="preview-option-key">{{ opt.key }}</span>
+                  <span class="preview-option-text">{{ opt.text }}</span>
+                </button>
+                <div v-if="cardBankSelectedOption" class="preview-answer" style="margin-top: 10px;">
+                  <div class="preview-answer-head">
+                    <span class="muted">Detailed answer</span>
+                  </div>
+                  <div class="preview-answer-box">
+                    {{ activeCardBankMcq.info || 'Detailed answer not available for this card.' }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="preview-answer" v-else>
+                <div class="preview-answer-head">
+                  <span class="muted">Answer</span>
+                  <button class="mini-btn ghost" @click="bankToggleFlip">{{ cardBankFlipped ? 'Hide' : 'Reveal' }}</button>
+                </div>
+                <div v-if="cardBankFlipped" class="preview-answer-box">
+                  {{ activeCardBankCard.back_text }}
+                </div>
+              </div>
+            </div>
+
+            <div class="preview-footer">
+              <div class="preview-footer-left">
+                <button class="preview-footer-btn info" @click="bankOpenMeta">More info</button>
+              </div>
+              <div class="toolbar">
+                <button class="mini-btn ghost" :disabled="cardBankIndex <= 0" @click="bankPrev">Prev</button>
+                <button class="mini-btn ghost" :disabled="cardBankIndex >= activeCardBankCards.length - 1" @click="bankNext">Next</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div class="modal" v-if="cardBankMetaOpen && activeCardBankCard">
+      <div class="modal-card neon">
+        <div class="panel-head">
+          <h3>Card info</h3>
+          <button class="mini-btn" @click="bankCloseMeta">Close</button>
+        </div>
+        <div class="modal-meta-row">
+          <span class="mini-chip">Box {{ activeCardBankCard.box_number || 1 }}</span>
+          <span class="mini-chip">{{ cardDueBadge(activeCardBankCard) }}</span>
+          <span class="mini-chip">Topic: {{ activeCardBankCard.topic_code || 'General' }}</span>
+          <span class="mini-chip">{{ selectedSubjectMeta() }}</span>
+        </div>
+        <div class="section-shell">
+          <strong class="muted">Question</strong>
+          <p>{{ activeCardBankCard.front_text }}</p>
+          <strong class="muted">Answer</strong>
+          <p style="white-space: pre-wrap;">{{ activeCardBankCard.back_text }}</p>
         </div>
       </div>
     </div>
@@ -1133,6 +1323,15 @@ onMounted(loadContext)
             </div>
           </div>
           <small class="muted">Lite allows up to 20 AI-generated cards per subject. Manual cards are unlimited.</small>
+          <div v-if="state.busy && aiProgress" class="ai-progress-shell">
+            <div class="ai-progress-head">
+              <small class="muted">{{ aiProgressLabel || 'Generating…' }}</small>
+              <small class="muted">{{ aiProgress }}%</small>
+            </div>
+            <div class="ai-progress-track">
+              <div class="ai-progress-fill" :style="{ width: `${aiProgress}%` }"></div>
+            </div>
+          </div>
           <div class="toolbar" style="margin-top:8px;">
             <button class="btn ghost" @click="createFlowStep = 'method'">Back</button>
             <button class="btn hot" :disabled="state.busy" @click="generatePreviewCards">

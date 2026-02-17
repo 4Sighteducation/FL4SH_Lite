@@ -34,6 +34,12 @@ const showSelfGrade = ref(false)
 const toastType = ref('') // correct | incorrect | ''
 const toastTargetBox = ref(0)
 const showExplanation = ref(false)
+const countdownSeconds = ref(10)
+const countdownRunning = ref(false)
+let countdownTimer = null
+
+const NON_MCQ_THINK_TIME_SECONDS = 10
+const GRADE_TOAST_MS = 1600
 
 const isMcqCard = computed(() => activeMcq.value.options.length > 0)
 const backBadgeLabel = computed(() => {
@@ -65,6 +71,10 @@ const cardsByBox = computed(() => {
 watch(
   () => props.activeStudyCard?.id,
   () => {
+    if (countdownTimer) {
+      window.clearInterval(countdownTimer)
+      countdownTimer = null
+    }
     selectedOption.value = ''
     selectedCorrect.value = null
     isFlipped.value = false
@@ -74,6 +84,28 @@ watch(
     toastTargetBox.value = 0
     isBusyGrading.value = false
     emit('set-reveal-answer', false)
+
+    // For non-MCQ cards, run a fixed "think time" countdown then reveal answer.
+    if (!isMcqCard.value && props.activeStudyCard?.id && props.sessionStarted) {
+      countdownSeconds.value = NON_MCQ_THINK_TIME_SECONDS
+      countdownRunning.value = true
+      countdownTimer = window.setInterval(() => {
+        if (!countdownRunning.value) return
+        countdownSeconds.value = Math.max(0, Number(countdownSeconds.value || 0) - 1)
+        if (countdownSeconds.value <= 0) {
+          countdownRunning.value = false
+          if (countdownTimer) {
+            window.clearInterval(countdownTimer)
+            countdownTimer = null
+          }
+          emit('set-reveal-answer', true)
+          showSelfGrade.value = true
+        }
+      }, 1000)
+    } else {
+      countdownRunning.value = false
+      countdownSeconds.value = NON_MCQ_THINK_TIME_SECONDS
+    }
   }
 )
 
@@ -104,18 +136,13 @@ function chooseOption(key) {
     selectedOption.value = ''
     selectedCorrect.value = null
     showExplanation.value = false
-  }, 700)
+  }, GRADE_TOAST_MS)
 }
 
 function toggleFlip() {
   if (isBusyGrading.value || isMcqCard.value) return
-  // Flip cards are one-way during a review: front -> back, then self-grade.
-  // Students must commit to correct/incorrect (no "flip back" / no "not yet").
-  if (isFlipped.value) return
-  isFlipped.value = true
-  emit('set-reveal-answer', isFlipped.value)
-  // When the answer is visible, prompt for self-grade (in-modal, not on page footer).
-  showSelfGrade.value = true
+  // Study flow for non-MCQ is timer-driven (no manual flipping).
+  return
 }
 
 function closeSelfGrade() {
@@ -124,6 +151,11 @@ function closeSelfGrade() {
 
 function selfGrade(correct) {
   if (isBusyGrading.value) return
+  countdownRunning.value = false
+  if (countdownTimer) {
+    window.clearInterval(countdownTimer)
+    countdownTimer = null
+  }
   toastType.value = correct ? 'correct' : 'incorrect'
   toastTargetBox.value = computeTargetBox(Boolean(correct))
   isBusyGrading.value = true
@@ -135,7 +167,19 @@ function selfGrade(correct) {
     toastTargetBox.value = 0
     isFlipped.value = false
     emit('set-reveal-answer', false)
-  }, 700)
+  }, GRADE_TOAST_MS)
+}
+
+function revealNow() {
+  if (isMcqCard.value) return
+  countdownRunning.value = false
+  countdownSeconds.value = 0
+  if (countdownTimer) {
+    window.clearInterval(countdownTimer)
+    countdownTimer = null
+  }
+  emit('set-reveal-answer', true)
+  showSelfGrade.value = true
 }
 </script>
 
@@ -316,20 +360,26 @@ function selfGrade(correct) {
 
           <!-- Short answer / Essay: 3D flip -->
           <div v-else class="flip-container">
-            <div class="flip-card" :class="{ flipped: isFlipped }" @click="toggleFlip">
+            <div class="flip-card flipped">
               <div class="flip-face flip-front">
                 <div class="face-body">
                   <span class="face-side-label front-label">Question</span>
                   <div class="face-question">{{ props.activeStudyCard.front_text }}</div>
                 </div>
-                <div class="flip-hint">Tap anywhere to flip</div>
+                <div class="flip-hint">
+                  <span v-if="countdownRunning">Think time: {{ countdownSeconds }}s</span>
+                  <span v-else>Answer revealed</span>
+                  <button class="mini-btn ghost" style="margin-left: 10px;" v-if="countdownRunning" @click.stop="revealNow">Reveal now</button>
+                </div>
               </div>
               <div class="flip-face flip-back" :class="{ essay: String(props.activeStudyCard?.card_type || '').toLowerCase().includes('essay') }">
                 <div class="face-body">
                   <span class="face-side-label back-label">{{ backBadgeLabel }}</span>
-                  <div class="face-answer">{{ props.activeStudyCard.back_text }}</div>
+                  <div class="face-answer" v-if="props.revealAnswer">{{ props.activeStudyCard.back_text }}</div>
+                  <div v-else class="face-answer" style="opacity: 0.35;">Answer hidden…</div>
                 </div>
-                <div class="flip-hint">Mark correct or incorrect to continue</div>
+                <div class="flip-hint" v-if="props.revealAnswer">Were you correct?</div>
+                <div class="flip-hint" v-else>Answer will reveal automatically</div>
               </div>
             </div>
           </div>

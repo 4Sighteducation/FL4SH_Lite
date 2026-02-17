@@ -602,6 +602,43 @@ h2, h3, h4 { margin: 0 0 8px; }
   gap: 10px;
   flex-shrink:0;
 }
+.prio-pill-btn{
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+.prio-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width: 34px;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(100,130,200,0.18);
+  font-family: "Space Mono", monospace;
+  font-size: 0.72rem;
+  font-weight: 900;
+  background: rgba(10,16,32,0.62);
+  color: rgba(200,220,255,0.9);
+}
+.prio-pill.none{ opacity: 0.65; }
+.prio-pill.p1{
+  border-color: rgba(255,51,102,0.45);
+  color: rgba(255,230,236,0.96);
+  box-shadow: 0 0 14px rgba(255,51,102,0.10);
+}
+.prio-pill.p2{
+  border-color: rgba(255,169,68,0.50);
+  color: rgba(255,242,230,0.96);
+  box-shadow: 0 0 14px rgba(255,169,68,0.10);
+}
+.prio-pill.p3{
+  border-color: rgba(0,255,136,0.40);
+  color: rgba(235,255,246,0.96);
+  box-shadow: 0 0 14px rgba(0,255,136,0.10);
+}
 .sd-topic-progress-bar{
   width: 52px;
   height: 4px;
@@ -904,6 +941,25 @@ textarea, input, select {
   padding: 5px 10px;
   z-index: 2;
 }
+.box-pill{
+  position:absolute;
+  top: 14px;
+  left: 14px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-family: "Space Mono", monospace;
+  font-size: .72rem;
+  font-weight: 800;
+  color: rgba(230, 240, 255, 0.95);
+  background: rgba(10, 16, 32, 0.78);
+  border: 1px solid rgba(100, 130, 200, 0.18);
+  z-index: 2;
+}
+.box-pill.box-1{ border-color: rgba(255,51,102,0.40); box-shadow: 0 0 14px rgba(255,51,102,0.12); }
+.box-pill.box-2{ border-color: rgba(0,245,255,0.36); box-shadow: 0 0 14px rgba(0,245,255,0.12); }
+.box-pill.box-3{ border-color: rgba(139,140,249,0.36); box-shadow: 0 0 14px rgba(139,140,249,0.12); }
+.box-pill.box-4{ border-color: rgba(255,169,68,0.40); box-shadow: 0 0 14px rgba(255,169,68,0.12); }
+.box-pill.box-5{ border-color: rgba(0,255,136,0.40); box-shadow: 0 0 14px rgba(0,255,136,0.12); }
 .preview-body{
   position: relative;
   z-index: 1;
@@ -1258,6 +1314,34 @@ textarea, input, select {
   box-shadow: 0 0 12px rgba(0, 245, 255, 0.28);
 }
 
+.ai-progress-shell{
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(100,130,200,0.18);
+  background: rgba(11, 21, 48, 0.52);
+  padding: 10px 12px;
+}
+.ai-progress-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom: 8px;
+}
+.ai-progress-track{
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(125, 149, 210, 0.22);
+  overflow:hidden;
+}
+.ai-progress-fill{
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(255, 169, 68, 0.92), rgba(0,245,255,0.92));
+  box-shadow: 0 0 12px rgba(255,169,68,0.18);
+  transition: width .22s ease;
+}
+
 .muted { color: #a7b6df; }
 .error {
   margin-top: 8px;
@@ -1560,6 +1644,9 @@ textarea, input, select {
   border: 1px solid rgba(100,130,200,0.18);
   background: linear-gradient(165deg, #101939, #0f1837);
   padding: 16px;
+}
+.study-grade-card h4{
+  margin-bottom: 6px;
 }
 
 .study-outcome{

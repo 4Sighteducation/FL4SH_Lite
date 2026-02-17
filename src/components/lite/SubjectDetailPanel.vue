@@ -8,6 +8,7 @@ const props = defineProps({
   topicTreeLoading: { type: Boolean, required: true },
   topicTreeError: { type: String, required: true },
   activeTopicFilter: { type: String, required: true },
+  topicPriorities: { type: Object, required: true },
   topicTree: { type: Array, required: true },
   topicRows: { type: Array, required: true },
   expandedTopics: { type: Object, required: true },
@@ -27,6 +28,7 @@ const emit = defineEmits([
   'toggle-topic-row',
   'open-create-flow',
   'open-card-bank',
+  'set-topic-priority',
 ])
 
 const topicSearch = ref('')
@@ -55,6 +57,83 @@ const filteredTopicRows = computed(() => {
   if (!query) return props.topicRows
   return allTopicRows.value.filter((row) => String(row.label || '').toLowerCase().includes(query))
 })
+
+function rawPriority(topicCode) {
+  const key = String(topicCode || '').trim()
+  if (!key) return 0
+  return Number(props.topicPriorities?.[key] || 0) || 0
+}
+
+const priorityById = computed(() => {
+  const walk = (nodes) => {
+    const result = new Map()
+    const visit = (node) => {
+      const id = String(node?.id || node?.topic_code || node?.topic_name || '')
+      const code = String(node?.topic_code || node?.topic_name || '')
+      const children = Array.isArray(node?.children) ? node.children : []
+      if (!children.length) {
+        const p = rawPriority(code)
+        result.set(id, p)
+        return { p, has: Boolean(p) }
+      }
+      let sum = 0
+      let count = 0
+      children.forEach((child) => {
+        const info = visit(child)
+        if (info.has) {
+          sum += info.p
+          count += 1
+        }
+      })
+      if (count > 0) {
+        const avg = Math.round(sum / count)
+        result.set(id, avg)
+        return { p: avg, has: true }
+      }
+      const own = rawPriority(code)
+      result.set(id, own)
+      return { p: own, has: Boolean(own) }
+    }
+    ;(Array.isArray(nodes) ? nodes : []).forEach(visit)
+    return result
+  }
+  return walk(props.topicTree || [])
+})
+
+function effectivePriority(row) {
+  const id = String(row?.id || '')
+  if (!id) return 0
+  return Number(priorityById.value.get(id) || 0) || 0
+}
+
+function priorityLabel(p) {
+  if (p === 1) return 'P1'
+  if (p === 2) return 'P2'
+  if (p === 3) return 'P3'
+  return '—'
+}
+function priorityText(p) {
+  if (p === 1) return 'High'
+  if (p === 2) return 'Medium'
+  if (p === 3) return 'Low'
+  return 'Set priority'
+}
+function priorityClass(p) {
+  return {
+    'prio-pill': true,
+    p1: p === 1,
+    p2: p === 2,
+    p3: p === 3,
+    none: !p,
+  }
+}
+function cyclePriority(row) {
+  const code = String(row?.topic_code || '').trim()
+  if (!code) return
+  const current = rawPriority(code)
+  const next = current === 1 ? 2 : current === 2 ? 3 : current === 3 ? 0 : 1
+  emit('set-topic-priority', { topic_code: code, priority: next })
+}
 
 const totalCards = computed(() => Number(props.cards?.length || 0))
 function progressPercent(count) {
@@ -168,6 +247,13 @@ function progressPercent(count) {
           </span>
           <span class="sd-topic-name">{{ row.label }}</span>
           <div class="sd-topic-meta">
+            <button
+              class="prio-pill-btn"
+              :title="priorityText(effectivePriority(row))"
+              @click.stop="cyclePriority(row)"
+            >
+              <span :class="priorityClass(effectivePriority(row))">{{ priorityLabel(effectivePriority(row)) }}</span>
+            </button>
             <div class="sd-topic-progress-bar">
               <div
                 class="sd-topic-progress-fill"
