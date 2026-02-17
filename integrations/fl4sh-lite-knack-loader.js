@@ -34,6 +34,33 @@
     return document.querySelector('.kn-rich_text__content') || document.body;
   }
 
+  function getTopOffsetPx() {
+    const candidates = [
+      '#knack-body .knHeader',
+      '.knHeader',
+      '#knack-body .kn-header',
+      '.kn-header',
+      '#knack-body header',
+      'header',
+    ];
+
+    let maxBottom = 0;
+    for (const sel of candidates) {
+      const el = document.querySelector(sel);
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      if (!rect || !Number.isFinite(rect.bottom)) continue;
+      const style = window.getComputedStyle(el);
+      // Only treat fixed/sticky headers as an overlay offset.
+      if (style.position !== 'fixed' && style.position !== 'sticky') continue;
+      if (rect.bottom > maxBottom) maxBottom = rect.bottom;
+    }
+
+    // Clamp to something sensible.
+    const px = Math.max(0, Math.min(220, Math.round(maxBottom)));
+    return px;
+  }
+
   async function fetchAssetUrls(appUrl) {
     const res = await fetch(appUrl, { credentials: 'omit', cache: 'no-store' });
     if (!res.ok) throw new Error(`Failed to fetch app shell (${res.status})`);
@@ -54,11 +81,14 @@
     wrapper.className = 'fl4sh-lite-host';
     wrapper.style.width = '100%';
     wrapper.style.minHeight = '72vh';
+    wrapper.style.boxSizing = 'border-box';
 
     const mount = document.createElement('div');
     mount.id = 'app';
     wrapper.appendChild(mount);
     target.appendChild(wrapper);
+
+    return wrapper;
   }
 
   function injectCss(cssUrl) {
@@ -95,7 +125,23 @@
       if (!target) throw new Error(`Mount target not found for selector: ${elementSelector}`);
 
       const { jsUrl, cssUrl } = await fetchAssetUrls(appUrl);
-      ensureMount(target);
+      const wrapper = ensureMount(target);
+
+      // When embedded inside Knack, the General Header often overlays the top of the viewport.
+      // Apply an offset so the app starts below it.
+      const applyOffset = () => {
+        const topOffset = getTopOffsetPx();
+        wrapper.style.paddingTop = topOffset ? `${topOffset}px` : '0px';
+        wrapper.style.minHeight = topOffset ? `calc(100vh - ${topOffset}px)` : '72vh';
+        try { document.documentElement.style.scrollPaddingTop = topOffset ? `${topOffset}px` : '0px'; } catch (_) {}
+      };
+      applyOffset();
+      window.addEventListener('resize', applyOffset);
+      // Knack sometimes animates header height; re-apply briefly after mount.
+      setTimeout(applyOffset, 250);
+      setTimeout(applyOffset, 800);
+      setTimeout(applyOffset, 1500);
+
       injectCss(cssUrl);
       await injectModule(jsUrl);
       log('Initialized successfully', { appUrl, elementSelector, jsUrl, cssUrl });

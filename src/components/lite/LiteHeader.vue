@@ -11,7 +11,7 @@ const emit = defineEmits(['store-click', 'website-click'])
 <template>
   <header class="topbar neon">
     <div class="brand-wrap">
-      <div class="logo-mark"><img src="/flashv2.png" alt="FL4SH logo" /></div>
+      <div class="logo-mark"><img :src="props.links.logoPng" alt="FL4SH logo" /></div>
       <div>
         <div class="logo">FL4SH Lite</div>
         <div class="meta">{{ props.user?.name || 'Student' }} · {{ props.user?.school_name || '' }}</div>
