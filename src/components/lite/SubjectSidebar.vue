@@ -12,7 +12,7 @@ const props = defineProps({
   getSubjectTheme: { type: Function, required: true },
 })
 
-const emit = defineEmits(['manage-subjects', 'open-subject', 'set-subject-color', 'update:subject-search'])
+const emit = defineEmits(['manage-subjects', 'open-subject', 'set-subject-color', 'delete-subject', 'update:subject-search'])
 
 function onSearchInput(event) {
   emit('update:subject-search', event?.target?.value || '')
@@ -40,6 +40,11 @@ function openSubjectSafe(subjectKey) {
 function manageSubjectsSafe() {
   closeThemePicker()
   emit('manage-subjects')
+}
+
+function deleteSubjectSafe(subjectKey) {
+  closeThemePicker()
+  emit('delete-subject', subjectKey)
 }
 </script>
 
@@ -74,7 +79,10 @@ function manageSubjectsSafe() {
         <small class="subject-count">{{ s.card_count || 0 }} total cards</small>
         <label class="subject-color-row">
           <span>Theme</span>
-          <button class="mini-btn ghost" @click.stop="openThemePicker(s.subject_key)">Choose</button>
+          <div class="toolbar" style="justify-content:flex-end;">
+            <button class="mini-btn danger" title="Delete subject" @click.stop="deleteSubjectSafe(s.subject_key)">Delete</button>
+            <button class="mini-btn ghost" @click.stop="openThemePicker(s.subject_key)">Choose</button>
+          </div>
         </label>
       </button>
       <div v-if="props.allSelectedSubjectsLength > 0 && !props.selectedSubjects.length" class="muted">

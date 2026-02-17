@@ -454,6 +454,45 @@ async function saveSubjects() {
   }
 }
 
+async function deleteSubject(subjectKey) {
+  const key = String(subjectKey || '').trim()
+  if (!key || state.busy) return
+  const subject = state.selectedSubjects.find((s) => s.subject_key === key)
+  const name = subject?.subject_name || key
+
+  const confirmed = window.confirm(
+    `Delete "${name}" from FL4SH Lite?\n\n` +
+      `This will permanently delete ALL cards saved in this subject (Card Bank + Study schedule). This cannot be undone.\n\nContinue?`
+  )
+  if (!confirmed) return
+
+  state.busy = true
+  clearError()
+  try {
+    const remainingKeys = uniqueKeys(state.selectedSubjects.map((s) => s.subject_key)).filter((k) => k !== key)
+    subjectDraft.value = remainingKeys
+    const subjects = state.availableSubjects
+      .filter((s) => remainingKeys.includes(s.subject_key))
+      .map((s) => ({
+        subject_key: s.subject_key,
+        subject_name: s.subject_name,
+        exam_board: s.exam_board,
+        qualification_type: s.qualification_type,
+      }))
+    const data = await saveLiteSubjects(callFn, subjects)
+    state.selectedSubjects = dedupeSubjects(data.selected_subjects)
+    if (!state.selectedSubjects.some((s) => s.subject_key === state.selectedSubjectKey)) {
+      state.selectedSubjectKey = state.selectedSubjects[0]?.subject_key || ''
+      view.value = state.selectedSubjectKey ? 'subject' : 'home'
+    }
+    await loadCards()
+  } catch (e) {
+    handleLiteError(e, 'Could not delete subject.', 'subject_delete')
+  } finally {
+    state.busy = false
+  }
+}
+
 function openSubject(subjectKey) {
   state.selectedSubjectKey = subjectKey
   view.value = 'subject'
@@ -1108,6 +1147,7 @@ onMounted(loadContext)
         @manage-subjects="openSubjectModal"
         @open-subject="openSubject"
         @set-subject-color="setSubjectColorFromSidebar"
+        @delete-subject="deleteSubject"
         @update:subject-search="subjectSearch = $event"
       />
 
@@ -1263,6 +1303,9 @@ onMounted(loadContext)
             <div class="preview-footer">
               <div class="preview-footer-left">
                 <button class="info-icon-btn" title="More info" @click="bankOpenMeta"><span>i</span></button>
+                <button class="trash-icon-btn" title="Delete card" @click="bankDeleteActiveCard">
+                  <span>🗑</span>
+                </button>
               </div>
               <div class="toolbar">
                 <button class="mini-btn ghost" :disabled="cardBankIndex <= 0" @click="bankPrev">Prev</button>
@@ -1278,10 +1321,7 @@ onMounted(loadContext)
       <div class="modal-card neon">
         <div class="panel-head">
           <h3>Card info</h3>
-          <div class="toolbar">
-            <button class="mini-btn danger" @click="bankDeleteActiveCard">Delete</button>
-            <button class="mini-btn" @click="bankCloseMeta">Close</button>
-          </div>
+          <button class="mini-btn" @click="bankCloseMeta">Close</button>
         </div>
         <div class="modal-meta-row">
           <span class="mini-chip">Box {{ activeCardBankCard.box_number || 1 }}</span>
@@ -1292,10 +1332,23 @@ onMounted(loadContext)
         <div class="section-shell">
           <strong class="muted">Question</strong>
           <p>{{ activeCardBankCard.front_text }}</p>
-          <strong class="muted">Answer</strong>
-          <p style="white-space: pre-wrap;">{{ activeCardBankSections.answer || '—' }}</p>
+          <template v-if="isCardBankMcq">
+            <strong class="muted">Answer</strong>
+            <p style="white-space: pre-wrap;">
+              {{ activeCardBankMcq.correct ? `Correct answer: ${activeCardBankMcq.correct}` : '—' }}
+            </p>
+          </template>
+          <template v-else>
+            <strong class="muted">Answer</strong>
+            <p style="white-space: pre-wrap;">{{ activeCardBankSections.answer || '—' }}</p>
+          </template>
           <strong class="muted">Detailed breakdown</strong>
-          <p style="white-space: pre-wrap;">{{ activeCardBankSections.detailed || 'Open FL4SH for the deeper breakdown, examples, and links to related topics.' }}</p>
+          <p style="white-space: pre-wrap;">
+            {{
+              (isCardBankMcq ? activeCardBankMcq.info : activeCardBankSections.detailed)
+              || 'Open FL4SH for the deeper breakdown, examples, and links to related topics.'
+            }}
+          </p>
           <div v-if="activeCardBankSections.relatedTopics && activeCardBankSections.relatedTopics.length" style="margin-top: 10px;">
             <strong class="muted">Related topics</strong>
             <div class="toolbar" style="margin-top: 6px; flex-wrap: wrap; justify-content:flex-start;">

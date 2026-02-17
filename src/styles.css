@@ -1312,6 +1312,24 @@ textarea, input, select {
   border-color: rgba(0,245,255,0.35);
   box-shadow: 0 0 12px rgba(0,245,255,0.18);
 }
+.trash-icon-btn{
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,51,102,0.32);
+  background: rgba(255,51,102,0.10);
+  color: rgba(255,231,239,0.95);
+  display:grid;
+  place-items:center;
+  cursor: pointer;
+  transition: transform .12s ease, border-color .12s ease, box-shadow .12s ease;
+  font-weight: 900;
+}
+.trash-icon-btn:hover{
+  transform: translateY(-1px);
+  border-color: rgba(255,51,102,0.62);
+  box-shadow: 0 0 12px rgba(255,51,102,0.14);
+}
 .preview-footer-btn{
   border: 1px solid transparent;
   background: transparent;
