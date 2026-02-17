@@ -5,6 +5,7 @@ const props = defineProps({
   visible: { type: Boolean, required: true },
   selectedSubject: { type: Object, default: null },
   cards: { type: Array, required: true },
+  boxStats: { type: Array, required: true },
   topicTreeLoading: { type: Boolean, required: true },
   topicTreeError: { type: String, required: true },
   activeTopicFilter: { type: String, required: true },
@@ -29,6 +30,7 @@ const emit = defineEmits([
   'open-create-flow',
   'open-card-bank',
   'set-topic-priority',
+  'open-box-preview',
 ])
 
 const topicSearch = ref('')
@@ -271,6 +273,27 @@ function topicAccent(depth) {
       <div class="sd-stat-cell">
         <span class="sd-stat-number correct">{{ props.masteredCount }}</span>
         <span class="sd-stat-label">Mastered</span>
+      </div>
+    </div>
+
+    <div class="leitner-wrap compact">
+      <div class="leitner-head">
+        <strong>Leitner boxes</strong>
+        <small class="muted">Click a box to preview questions</small>
+      </div>
+      <div class="leitner-grid" style="grid-template-columns: repeat(5, minmax(110px, 1fr));">
+        <button
+          v-for="b in props.boxStats"
+          :key="`sd-box-${b.box}`"
+          class="leitner-box"
+          @click="emit('open-box-preview', b.box)"
+        >
+          <div class="box-label">
+            <strong>Box {{ b.box }}</strong>
+            <span>{{ b.title }}</span>
+          </div>
+          <div class="box-count">{{ b.count }} card{{ b.count === 1 ? '' : 's' }}</div>
+        </button>
       </div>
     </div>
 

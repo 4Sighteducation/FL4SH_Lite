@@ -56,7 +56,8 @@ function pickTheme(theme) {
         @click="emit('open-subject', s.subject_key)"
         :style="{
           borderColor: props.getSubjectColor(s.subject_key),
-          backgroundImage: props.getSubjectTheme(s.subject_key)?.gradient || 'none',
+          '--subject-accent': props.getSubjectTheme(s.subject_key)?.accent || props.getSubjectColor(s.subject_key),
+          '--subject-grad': props.getSubjectTheme(s.subject_key)?.gradient || props.getSubjectColor(s.subject_key),
         }"
       >
         <span class="subject-name">{{ s.subject_name }}</span>

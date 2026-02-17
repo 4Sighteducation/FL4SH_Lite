@@ -189,11 +189,19 @@ serve(async (req: Request) => {
     const requested = clampInt(payload.numCards ?? payload.num_cards, 1, 5, 3);
     const previewOnly = Boolean(payload.preview_only);
     const rawGuidance = String(payload.contentGuidance || payload.content_guidance || "").trim();
+    const extraEssayGuidance = questionType === "essay"
+      ? [
+        "For essay prompts, include guidance on structure (intro, main points, evaluation, conclusion) and exam-style phrasing.",
+        "Include 2-3 bullet example points or evidence the student could mention."
+      ]
+      : [];
+
     const enforcedGuidance = [
       rawGuidance,
       "For EVERY card, include a detailedAnswer field: a clear, structured breakdown with extra depth.",
       "Where helpful, include a small list of relatedTopics (short phrases) that connect to nearby specification areas.",
-      "Avoid unnecessary fluff; be concise but exam-aligned."
+      "Avoid unnecessary fluff; be concise but exam-aligned.",
+      ...extraEssayGuidance,
     ].filter(Boolean).join("\n");
     const contentGuidance = enforcedGuidance.trim() ? enforcedGuidance.trim() : undefined;
 

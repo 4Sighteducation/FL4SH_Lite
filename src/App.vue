@@ -90,6 +90,10 @@ const cardBankFlipped = ref(false)
 const cardBankSelectedOption = ref('')
 const cardBankSelectedCorrect = ref(null)
 const cardBankMetaOpen = ref(false)
+const boxPreviewOpen = ref(false)
+const boxPreviewBox = ref(1)
+const boxPreviewIndex = ref(0)
+const boxPreviewCardIds = ref([])
 const {
   selectedSubject,
   dueCards,
@@ -183,6 +187,7 @@ const createLeafTopics = computed(() => {
 })
 const createTopicCandidates = computed(() => {
   const q = createTopicSearch.value.trim().toLowerCase()
+  if (q.length < 2) return []
   return createLeafTopics.value.filter((row) =>
     !q ||
     String(row.label || '').toLowerCase().includes(q) ||
@@ -776,6 +781,44 @@ function closeCardBank() {
   cardBankError.value = ''
 }
 
+function openBoxPreview(boxNumber) {
+  const box = Math.max(1, Math.min(5, Number(boxNumber || 1)))
+  boxPreviewBox.value = box
+  const ids = state.cards
+    .filter((c) => Number(c?.box_number || 1) === box)
+    .map((c) => c.id)
+  boxPreviewCardIds.value = ids
+  boxPreviewIndex.value = 0
+  boxPreviewOpen.value = true
+}
+function closeBoxPreview() {
+  boxPreviewOpen.value = false
+  boxPreviewCardIds.value = []
+  boxPreviewIndex.value = 0
+}
+const boxPreviewCards = computed(() => {
+  const ids = boxPreviewCardIds.value
+  if (!ids.length) return []
+  return ids
+    .map((id) => state.cards.find((c) => c.id === id))
+    .filter(Boolean)
+})
+const activeBoxPreviewCard = computed(() => boxPreviewCards.value[boxPreviewIndex.value] || null)
+const canPrevBoxPreview = computed(() => boxPreviewCards.value.length > 1 && boxPreviewIndex.value > 0)
+const canNextBoxPreview = computed(() => boxPreviewCards.value.length > 1 && boxPreviewIndex.value < boxPreviewCards.value.length - 1)
+function prevBoxPreview() {
+  if (!canPrevBoxPreview.value) return
+  boxPreviewIndex.value -= 1
+}
+function nextBoxPreview() {
+  if (!canNextBoxPreview.value) return
+  boxPreviewIndex.value += 1
+}
+function goToStudyFromPreview() {
+  closeBoxPreview()
+  startStudy()
+}
+
 const activeCardBankCards = computed(() => {
   const key = String(cardBankSubjectKey.value || '').trim()
   const cards = cardBankCardsBySubject.value[key]
@@ -1056,6 +1099,7 @@ onMounted(loadContext)
         :visible="view === 'subject'"
         :selected-subject="selectedSubject"
         :cards="state.cards"
+        :box-stats="boxStats"
         :topic-tree-loading="state.topicTreeLoading"
         :topic-tree-error="state.topicTreeError"
         :active-topic-filter="activeTopicFilter"
@@ -1077,6 +1121,7 @@ onMounted(loadContext)
         @open-create-flow="openCreateFlow($event)"
         @open-card-bank="openCardBank"
         @set-topic-priority="setTopicPriority"
+        @open-box-preview="openBoxPreview($event)"
       />
 
       <StudyPanel
@@ -1190,7 +1235,7 @@ onMounted(loadContext)
 
             <div class="preview-footer">
               <div class="preview-footer-left">
-                <button class="preview-footer-btn info" @click="bankOpenMeta">More info</button>
+                <button class="info-icon-btn" title="More info" @click="bankOpenMeta"><span>i</span></button>
               </div>
               <div class="toolbar">
                 <button class="mini-btn ghost" :disabled="cardBankIndex <= 0" @click="bankPrev">Prev</button>
@@ -1231,6 +1276,61 @@ onMounted(loadContext)
       </div>
     </div>
 
+    <div class="modal" v-if="boxPreviewOpen">
+      <div class="modal-card neon create-flow-modal">
+        <div class="panel-head">
+          <div>
+            <h3>Box {{ boxPreviewBox }} preview</h3>
+            <small class="muted">Questions only — no answers shown here.</small>
+          </div>
+          <button class="mini-btn" @click="closeBoxPreview">Close</button>
+        </div>
+
+        <div v-if="!boxPreviewCards.length" class="muted" style="padding: 10px 2px;">
+          No cards in this box yet.
+        </div>
+
+        <template v-else>
+          <div class="preview-header-row" style="margin-top: 10px;">
+            <span class="muted">{{ selectedSubjectMeta() }}</span>
+            <div class="toolbar">
+              <button class="mini-btn" :disabled="!canPrevBoxPreview" @click="prevBoxPreview">‹</button>
+              <span class="mini-chip">{{ `${boxPreviewIndex + 1} / ${boxPreviewCards.length}` }}</span>
+              <button class="mini-btn" :disabled="!canNextBoxPreview" @click="nextBoxPreview">›</button>
+            </div>
+          </div>
+
+          <div class="preview-stage" v-if="activeBoxPreviewCard">
+            <div class="preview-counter">{{ boxPreviewIndex + 1 }} / {{ boxPreviewCards.length }}</div>
+            <div class="preview-body" style="min-height: 260px;">
+              <div class="preview-question">{{ activeBoxPreviewCard.front_text }}</div>
+
+              <div v-if="!isCardDue(activeBoxPreviewCard)" class="locked-cover">
+                <div class="locked-card">
+                  <strong>Locked</strong>
+                  <div class="muted">Locked until {{ formatDate(activeBoxPreviewCard.next_review_at) }}</div>
+                </div>
+              </div>
+
+              <div v-else class="notice neon" style="margin-top: 8px;">
+                Would you like to <strong>study</strong> these cards now?
+                <div class="toolbar" style="margin-top: 8px;">
+                  <button class="btn neon-btn" style="width:auto;" @click="goToStudyFromPreview">Go to Study Mode</button>
+                </div>
+              </div>
+            </div>
+            <div class="preview-footer">
+              <div class="preview-footer-left"></div>
+              <div class="toolbar">
+                <button class="mini-btn ghost" :disabled="!canPrevBoxPreview" @click="prevBoxPreview">Prev</button>
+                <button class="mini-btn ghost" :disabled="!canNextBoxPreview" @click="nextBoxPreview">Next</button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <UpsellModal
       :visible="state.showUpsell"
       :title="state.upsellTitle"
@@ -1268,19 +1368,24 @@ onMounted(loadContext)
           <p class="muted">Step 1: choose a topic</p>
           <input v-model="createTopicSearch" placeholder="Search topic..." />
           <div class="topic-tree-list">
-            <button
-              v-for="row in createTopicCandidates"
-              :key="`create-${row.id}`"
-              class="topic-row"
-              :class="{ active: createSelectedTopic === row.topic_code }"
-              @click="pickCreateTopic(row.topic_code)"
-            >
-              <span class="topic-label">{{ row.label }}</span>
-              <strong>{{ row.count || 0 }}</strong>
-            </button>
-            <div v-if="!createTopicCandidates.length" class="muted" style="padding: 8px 4px;">
-              No topics found for this subject. Load the topic tree first, then try again.
+            <div v-if="createTopicSearch.trim().length < 2" class="muted" style="padding: 10px 4px;">
+              Start typing to search topics (at least 2 characters). This avoids loading hundreds of topics at once.
             </div>
+            <template v-else>
+              <button
+                v-for="row in createTopicCandidates"
+                :key="`create-${row.id}`"
+                class="topic-row"
+                :class="{ active: createSelectedTopic === row.topic_code }"
+                @click="pickCreateTopic(row.topic_code)"
+              >
+                <span class="topic-label">{{ row.label }}</span>
+                <strong>{{ row.count || 0 }}</strong>
+              </button>
+              <div v-if="!createTopicCandidates.length" class="muted" style="padding: 8px 4px;">
+                No topics matched your search for this subject.
+              </div>
+            </template>
           </div>
         </template>
 
