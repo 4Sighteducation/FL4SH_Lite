@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, required: true },
@@ -24,6 +24,14 @@ const emit = defineEmits([
   'save-subjects',
 ])
 
+const pickerOpen = ref(false)
+watch(
+  () => props.visible,
+  (v) => {
+    if (!v) pickerOpen.value = false
+  }
+)
+
 function setCourseType(courseTypeId) {
   emit('update:modalCourseType', courseTypeId)
 }
@@ -40,6 +48,12 @@ function onSearchInput(event) {
 }
 function clearSearch() {
   emit('update:modalSearch', '')
+}
+function openPicker() {
+  pickerOpen.value = true
+}
+function closePicker() {
+  pickerOpen.value = false
 }
 
 function isSubjectLocked(subjectKey) {
@@ -117,32 +131,55 @@ const sortedModalSubjects = computed(() => {
           <button v-if="props.modalSearch" class="mini-btn" @click="clearSearch">Clear</button>
         </div>
         <small class="muted">Showing {{ props.resultCount }} subject{{ props.resultCount === 1 ? '' : 's' }} · {{ props.modalLevel }}</small>
+        <div class="wizard-actions">
+          <button class="btn neon-btn" type="button" @click="openPicker">Browse subjects</button>
+          <small class="muted">Selected: {{ props.subjectDraft.length }} / {{ props.maxSubjects }}</small>
+        </div>
       </div>
 
-      <div class="subject-pick">
-        <button
-          v-for="subject in sortedModalSubjects"
-          :key="`modal-${subject.subject_key}`"
-          class="subject-item picker"
-          :class="{ active: props.subjectDraft.includes(subject.subject_key), locked: isSubjectLocked(subject.subject_key) }"
-          :disabled="isSubjectLocked(subject.subject_key)"
-          @click="emit('toggle-subject', subject.subject_key)"
-        >
-          <div>
-            <div class="subject-name">{{ subject.subject_name }}</div>
-            <small class="subject-meta">{{ subject.exam_board }} · {{ subject.qualification_type }}</small>
-            <small class="subject-selected-tag" v-if="props.subjectDraft.includes(subject.subject_key)">Selected</small>
-          </div>
-        </button>
-        <div v-if="!props.filteredModalSubjects.length" class="muted">No subjects match this search and level.</div>
-      </div>
       <div class="panel-head sticky-modal-footer">
         <small class="muted">Selected: {{ props.subjectDraft.length }} / {{ props.maxSubjects }}</small>
         <button class="btn neon-btn" :disabled="props.busy" @click="emit('save-subjects')">Save subjects</button>
       </div>
-      <small class="muted" v-if="props.subjectDraft.length >= props.maxSubjects">
-        Subject cap reached in Lite. Use full FL4SH app for unlimited subjects.
-      </small>
+
+      <div class="subject-picker-overlay" v-if="pickerOpen">
+        <div class="panel-head">
+          <h3>Choose subjects</h3>
+          <button class="mini-btn" type="button" @click="closePicker">Back</button>
+        </div>
+        <p class="muted">Pick up to {{ props.maxSubjects }} subjects. Selected subjects appear first.</p>
+        <div class="modal-search-row">
+          <input :value="props.modalSearch" @input="onSearchInput" placeholder="Search subjects..." />
+          <button v-if="props.modalSearch" class="mini-btn" @click="clearSearch">Clear</button>
+        </div>
+        <small class="muted">Showing {{ props.resultCount }} subject{{ props.resultCount === 1 ? '' : 's' }} · {{ props.modalLevel }}</small>
+
+        <div class="subject-pick subject-picker-grid">
+          <button
+            v-for="subject in sortedModalSubjects"
+            :key="`picker-${subject.subject_key}`"
+            class="subject-item picker"
+            :class="{ active: props.subjectDraft.includes(subject.subject_key), locked: isSubjectLocked(subject.subject_key) }"
+            :disabled="isSubjectLocked(subject.subject_key)"
+            @click="emit('toggle-subject', subject.subject_key)"
+          >
+            <div>
+              <div class="subject-name">{{ subject.subject_name }}</div>
+              <small class="subject-meta">{{ subject.exam_board }} · {{ subject.qualification_type }}</small>
+              <small class="subject-selected-tag" v-if="props.subjectDraft.includes(subject.subject_key)">Selected</small>
+            </div>
+          </button>
+          <div v-if="!props.filteredModalSubjects.length" class="muted">No subjects match this search and level.</div>
+        </div>
+
+        <div class="panel-head sticky-modal-footer">
+          <small class="muted">Selected: {{ props.subjectDraft.length }} / {{ props.maxSubjects }}</small>
+          <button class="btn neon-btn" :disabled="props.busy" @click="emit('save-subjects')">Save subjects</button>
+        </div>
+        <small class="muted" v-if="props.subjectDraft.length >= props.maxSubjects">
+          Subject cap reached in Lite. Use full FL4SH app for unlimited subjects.
+        </small>
+      </div>
     </div>
   </div>
 </template>
