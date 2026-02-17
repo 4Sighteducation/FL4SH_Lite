@@ -27,6 +27,7 @@ import {
   formatDate,
   formatDateTime,
   isCardDue,
+  parseTimestampMs,
   parseMcq,
   parseBackTextSections,
   shortLine,
@@ -414,6 +415,22 @@ async function saveSubjects() {
     if (draftKeys.length > state.limits.max_subjects) {
       throw new Error(`Select up to ${state.limits.max_subjects} subjects only.`)
     }
+
+    const currentKeys = uniqueKeys(state.selectedSubjects.map((s) => s.subject_key))
+    const removedKeys = currentKeys.filter((k) => !draftKeys.includes(k))
+    if (removedKeys.length) {
+      const removedNames = state.selectedSubjects
+        .filter((s) => removedKeys.includes(s.subject_key))
+        .map((s) => s.subject_name || s.subject_key)
+        .filter(Boolean)
+      const confirmed = window.confirm(
+        `You are removing ${removedKeys.length} subject${removedKeys.length === 1 ? '' : 's'}:\n\n` +
+          `${removedNames.slice(0, 6).join('\n')}${removedNames.length > 6 ? '\n…' : ''}\n\n` +
+          `This will permanently delete ALL cards for the removed subject(s) from FL4SH Lite. This cannot be undone.\n\nContinue?`
+      )
+      if (!confirmed) return
+    }
+
     const subjects = state.availableSubjects
       .filter((s) => draftKeys.includes(s.subject_key))
       .map((s) => ({
@@ -860,6 +877,15 @@ function bankOpenMeta() {
 function bankCloseMeta() {
   cardBankMetaOpen.value = false
 }
+async function bankDeleteActiveCard() {
+  const card = activeCardBankCard.value
+  if (!card?.id) return
+  cardBankMetaOpen.value = false
+  await requestDeleteCard(card.id)
+  // Refresh bank view.
+  const key = String(cardBankSubjectKey.value || '').trim()
+  if (key) await ensureCardBankCards(key)
+}
 async function bankSwitchSubject(subjectKey) {
   const key = String(subjectKey || '').trim()
   if (!key) return
@@ -877,12 +903,12 @@ function sortedCardsForTopic(topicCode) {
   return state.cards
     .filter((card) => String(card?.topic_code || '') === String(topicCode || ''))
     .sort((a, b) => {
-      const aDueAt = a?.next_review_at ? new Date(a.next_review_at).getTime() : 0
-      const bDueAt = b?.next_review_at ? new Date(b.next_review_at).getTime() : 0
-      const aDue = !aDueAt || aDueAt <= now
-      const bDue = !bDueAt || bDueAt <= now
+      const aDueAt = a?.next_review_at ? parseTimestampMs(a.next_review_at) : NaN
+      const bDueAt = b?.next_review_at ? parseTimestampMs(b.next_review_at) : NaN
+      const aDue = isCardDue(a)
+      const bDue = isCardDue(b)
       if (aDue !== bDue) return aDue ? -1 : 1
-      if (aDueAt !== bDueAt) return aDueAt - bDueAt
+      if (Number.isFinite(aDueAt) && Number.isFinite(bDueAt) && aDueAt !== bDueAt) return aDueAt - bDueAt
       return String(a?.front_text || '').localeCompare(String(b?.front_text || ''))
     })
 }
@@ -1015,7 +1041,9 @@ async function generateCards() {
 
 async function requestDeleteCard(cardId) {
   if (!cardId || state.busy) return
-  const confirmed = window.confirm('Delete this card permanently from Lite?')
+  const confirmed = window.confirm(
+    'Delete this card permanently from FL4SH Lite?\n\nThis removes it from your card bank and study schedule. This cannot be undone.'
+  )
   if (!confirmed) return
   await deleteCard(cardId)
 }
@@ -1250,7 +1278,10 @@ onMounted(loadContext)
       <div class="modal-card neon">
         <div class="panel-head">
           <h3>Card info</h3>
-          <button class="mini-btn" @click="bankCloseMeta">Close</button>
+          <div class="toolbar">
+            <button class="mini-btn danger" @click="bankDeleteActiveCard">Delete</button>
+            <button class="mini-btn" @click="bankCloseMeta">Close</button>
+          </div>
         </div>
         <div class="modal-meta-row">
           <span class="mini-chip">Box {{ activeCardBankCard.box_number || 1 }}</span>
@@ -1554,6 +1585,7 @@ onMounted(loadContext)
       @toggle-details="cardModal.showDetails = !cardModal.showDetails"
       @choose-option="chooseMcqOption"
       @review="reviewFromModal"
+      @delete-card="requestDeleteCard(cardModal.card?.id).then(closeCardModal)"
       @prev-card="openPrevModalCard"
       @next-card="openNextModalCard"
     />

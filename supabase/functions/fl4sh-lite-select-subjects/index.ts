@@ -120,6 +120,26 @@ serve(async (req: Request) => {
     const db = getAppDbClient();
     const user = await upsertLiteUser(db, identity);
 
+    const nextKeys = subjects.map((s) => normalizeSubjectKey(s.subject_key)).filter(Boolean);
+    const { data: existingRows, error: existingErr } = await db
+      .from("fl4sh_lite_user_subjects")
+      .select("subject_key")
+      .eq("user_id", user.id);
+    if (existingErr) return json(500, { ok: false, error: existingErr.message });
+
+    const existingKeys = (existingRows || []).map((r: any) => normalizeSubjectKey(r?.subject_key)).filter(Boolean);
+    const removedKeys = existingKeys.filter((k) => !nextKeys.includes(k));
+
+    // When a subject is removed, cascade-delete its cards for this user (irreversible).
+    if (removedKeys.length) {
+      const { error: cardDeleteErr } = await db
+        .from("fl4sh_lite_cards")
+        .delete()
+        .eq("user_id", user.id)
+        .in("subject_key", removedKeys);
+      if (cardDeleteErr) return json(500, { ok: false, error: cardDeleteErr.message });
+    }
+
     const { error: deleteErr } = await db
       .from("fl4sh_lite_user_subjects")
       .delete()

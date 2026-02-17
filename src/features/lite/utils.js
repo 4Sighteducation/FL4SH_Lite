@@ -22,9 +22,34 @@ export function formatDateTime(dateValue) {
   return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
 }
 
+export function parseTimestampMs(value) {
+  if (!value) return NaN
+  if (value instanceof Date) return value.getTime()
+  if (typeof value === 'number') return value
+  const raw = String(value).trim()
+  if (!raw) return NaN
+
+  // Fast path: native parse.
+  let ms = Date.parse(raw)
+  if (Number.isFinite(ms)) return ms
+
+  // Common Postgres textual timestamp: "YYYY-MM-DD HH:MM:SS(.sss)+00"
+  // Normalise to ISO-ish: replace first space with "T" and "+00" -> "+00:00".
+  const isoish = raw
+    .replace(' ', 'T')
+    .replace(/([+\-]\d{2})$/, '$1:00')
+  ms = Date.parse(isoish)
+  if (Number.isFinite(ms)) return ms
+
+  return NaN
+}
+
 export function isCardDue(card) {
-  const dueAt = card?.next_review_at ? new Date(card.next_review_at).getTime() : 0
-  return !dueAt || dueAt <= Date.now()
+  // Missing schedule => treat as due. Unparseable schedule => treat as NOT due (safer than forcing early review).
+  if (!card?.next_review_at) return true
+  const dueAt = parseTimestampMs(card.next_review_at)
+  if (!Number.isFinite(dueAt)) return false
+  return dueAt <= Date.now()
 }
 
 export function flattenTopicRows(nodes, expandedTopics, depth = 0, out = []) {

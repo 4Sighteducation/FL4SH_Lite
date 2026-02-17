@@ -19,6 +19,7 @@ const emit = defineEmits([
   'toggle-details',
   'choose-option',
   'review',
+  'delete-card',
   'prev-card',
   'next-card',
 ])
@@ -77,6 +78,7 @@ const emit = defineEmits([
         <button class="mini-btn" :disabled="!props.canNextCard" @click="emit('next-card')">Next</button>
         <button class="btn ghost" @click="emit('toggle-flip')">{{ props.cardModal.flipped ? 'Show question' : 'Flip card' }}</button>
         <button class="btn ghost" @click="emit('toggle-details')">{{ props.cardModal.showDetails ? 'Hide details' : 'View details' }}</button>
+        <button class="btn ghost danger-btn" :disabled="props.busy" @click="emit('delete-card')">Delete</button>
         <button class="btn ghost" :disabled="props.busy || !props.isCardDue(props.cardModal.card)" @click="emit('review', false)">Not quite</button>
         <button class="btn neon-btn" :disabled="props.busy || !props.isCardDue(props.cardModal.card)" @click="emit('review', true)">Got it</button>
       </div>

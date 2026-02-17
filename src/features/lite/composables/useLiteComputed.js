@@ -1,6 +1,6 @@
 import { computed } from 'vue'
 import { boxConfig, examLevelChoices } from '../constants'
-import { cardBox, flattenTopicRows } from '../utils'
+import { cardBox, flattenTopicRows, isCardDue, parseTimestampMs } from '../utils'
 
 function normalizeCode(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_')
@@ -35,11 +35,7 @@ export function useLiteComputed({
   )
 
   const dueCards = computed(() => {
-    const now = Date.now()
-    return state.cards.filter((c) => {
-      const dueAt = c.next_review_at ? new Date(c.next_review_at).getTime() : 0
-      return !dueAt || dueAt <= now
-    })
+    return state.cards.filter((c) => isCardDue(c))
   })
 
   const activeStudyCard = computed(() => dueCards.value[state.studyIndex] || null)
@@ -61,12 +57,12 @@ export function useLiteComputed({
       return topicOk && boxOk
     })
     return [...cards].sort((a, b) => {
-      const aDueAt = a?.next_review_at ? new Date(a.next_review_at).getTime() : 0
-      const bDueAt = b?.next_review_at ? new Date(b.next_review_at).getTime() : 0
-      const aDue = !aDueAt || aDueAt <= now
-      const bDue = !bDueAt || bDueAt <= now
+      const aDueAt = a?.next_review_at ? parseTimestampMs(a.next_review_at) : NaN
+      const bDueAt = b?.next_review_at ? parseTimestampMs(b.next_review_at) : NaN
+      const aDue = isCardDue(a)
+      const bDue = isCardDue(b)
       if (aDue !== bDue) return aDue ? -1 : 1
-      if (aDueAt !== bDueAt) return aDueAt - bDueAt
+      if (Number.isFinite(aDueAt) && Number.isFinite(bDueAt) && aDueAt !== bDueAt) return aDueAt - bDueAt
       return String(a?.front_text || '').localeCompare(String(b?.front_text || ''))
     })
   })

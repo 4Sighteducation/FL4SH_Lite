@@ -314,6 +314,19 @@ h2, h3, h4 { margin: 0 0 8px; }
   border-color: var(--primary);
   box-shadow: 0 0 10px rgba(0, 245, 255, 0.28);
 }
+.mini-btn.danger{
+  border-color: rgba(255,51,102,0.55);
+  background: rgba(255,51,102,0.12);
+  color: #ffe7ef;
+}
+.mini-btn.danger:hover{
+  border-color: rgba(255,51,102,0.85);
+  background: rgba(255,51,102,0.18);
+}
+.danger-btn{
+  border-color: rgba(255,51,102,0.55) !important;
+  color: #ffe7ef !important;
+}
 
 .leitner-wrap {
   margin-top: 10px;
