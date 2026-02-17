@@ -796,10 +796,11 @@ function openCardModal(card) {
   cardModal.selectedCorrect = null
 }
 
-async function ensureCardBankCards(subjectKey) {
+async function ensureCardBankCards(subjectKey, opts = {}) {
   const key = String(subjectKey || '').trim()
   if (!key) return
-  if (cardBankCardsBySubject.value[key]) return
+  const force = Boolean(opts?.force)
+  if (!force && cardBankCardsBySubject.value[key]) return
   cardBankLoading.value = true
   cardBankError.value = ''
   try {
@@ -813,6 +814,14 @@ async function ensureCardBankCards(subjectKey) {
   } finally {
     cardBankLoading.value = false
   }
+}
+
+async function refreshCardBankCards(subjectKey) {
+  const key = String(subjectKey || '').trim()
+  if (!key) return
+  await ensureCardBankCards(key, { force: true })
+  const len = Array.isArray(cardBankCardsBySubject.value[key]) ? cardBankCardsBySubject.value[key].length : 0
+  if (cardBankIndex.value >= len) cardBankIndex.value = Math.max(0, len - 1)
 }
 
 async function openCardBank(subjectKey = '') {
@@ -920,11 +929,21 @@ function bankCloseMeta() {
 async function bankDeleteActiveCard() {
   const card = activeCardBankCard.value
   if (!card?.id) return
-  cardBankMetaOpen.value = false
-  await requestDeleteCard(card.id)
-  // Refresh bank view.
   const key = String(cardBankSubjectKey.value || '').trim()
-  if (key) await ensureCardBankCards(key)
+  const id = String(card.id)
+  cardBankMetaOpen.value = false
+  const ok = await requestDeleteCard(card.id)
+  if (!ok) return
+
+  // Optimistically remove the card from Card Bank list immediately.
+  if (key && Array.isArray(cardBankCardsBySubject.value[key])) {
+    const nextList = cardBankCardsBySubject.value[key].filter((c) => String(c?.id || '') !== id)
+    cardBankCardsBySubject.value = { ...cardBankCardsBySubject.value, [key]: nextList }
+    if (cardBankIndex.value >= nextList.length) cardBankIndex.value = Math.max(0, nextList.length - 1)
+  }
+
+  // Best-effort refresh from server to keep schedule accurate.
+  if (key) await refreshCardBankCards(key)
 }
 async function bankSwitchSubject(subjectKey) {
   const key = String(subjectKey || '').trim()
@@ -1085,7 +1104,7 @@ async function requestDeleteCard(cardId) {
     'Delete this card permanently from FL4SH Lite?\n\nThis removes it from your card bank and study schedule. This cannot be undone.'
   )
   if (!confirmed) return
-  await deleteCard(cardId)
+  return await deleteCard(cardId)
 }
 
 async function deleteCard(cardId) {
@@ -1094,8 +1113,10 @@ async function deleteCard(cardId) {
   try {
     await deleteLiteCard(callFn, cardId)
     await loadCards()
+    return true
   } catch (e) {
     handleLiteError(e, 'Could not delete card.', 'card_delete')
+    return false
   } finally {
     deletingCardId.value = ''
     state.busy = false
@@ -1251,11 +1272,11 @@ onMounted(loadContext)
         </div>
         <div v-if="state.error" class="error" style="margin-top: 8px;">{{ state.error }}</div>
 
-        <template v-else>
+        <template v-else-if="activeCardBankCard">
           <div class="preview-header-row" style="margin-top: 10px;">
             <span class="muted">{{ selectedSubjectMeta() }}</span>
             <div class="toolbar">
-              <span class="box-chip" :class="`box-${activeCardBankCard.box_number || 1}`">Box {{ activeCardBankCard.box_number || 1 }}</span>
+              <span class="box-chip" :class="`box-${activeCardBankCard?.box_number || 1}`">Box {{ activeCardBankCard?.box_number || 1 }}</span>
               <button class="mini-btn" :disabled="cardBankIndex <= 0" @click="bankPrev">‹</button>
               <span class="mini-chip">{{ `${cardBankIndex + 1} / ${activeCardBankCards.length}` }}</span>
               <button class="mini-btn" :disabled="cardBankIndex >= activeCardBankCards.length - 1" @click="bankNext">›</button>
@@ -1319,6 +1340,9 @@ onMounted(loadContext)
             </div>
           </div>
         </template>
+        <div v-else class="muted" style="padding: 8px 2px;">
+          No cards to show.
+        </div>
       </div>
     </div>
 
