@@ -35,11 +35,20 @@
   }
 
   function getTopOffsetPx() {
+    // Knack can render the header as multiple stacked bars, sometimes without
+    // marking the outer container as fixed/sticky even though it overlays content.
+    // We measure the maximum visible "bottom" of known header candidates that sit at the top.
     const candidates = [
       '#knack-body .knHeader',
       '.knHeader',
       '#knack-body .kn-header',
       '.kn-header',
+      '#knack-body .kn-navigation',
+      '.kn-navigation',
+      '#knack-body .kn-menu',
+      '.kn-menu',
+      '#knack-body .kn-tab-menu',
+      '.kn-tab-menu',
       '#knack-body header',
       'header',
     ];
@@ -49,16 +58,26 @@
       const el = document.querySelector(sel);
       if (!el) continue;
       const rect = el.getBoundingClientRect();
-      if (!rect || !Number.isFinite(rect.bottom)) continue;
+      if (!rect || !Number.isFinite(rect.bottom) || !Number.isFinite(rect.height)) continue;
+
       const style = window.getComputedStyle(el);
-      // Only treat fixed/sticky headers as an overlay offset.
-      if (style.position !== 'fixed' && style.position !== 'sticky') continue;
+      if (style.display === 'none' || style.visibility === 'hidden') continue;
+      if (rect.height < 30) continue;
+
+      // Only consider elements that actually overlap the top of the viewport.
+      if (rect.top > 2) continue;
+
+      // Some elements are position:static but still part of the overlay header stack.
+      // Prefer fixed/sticky, but allow known Knack header selectors through regardless.
+      const isFixedLike = style.position === 'fixed' || style.position === 'sticky';
+      const isKnownHeader = sel.includes('knHeader') || sel.includes('kn-tab-menu') || sel.includes('kn-menu') || sel.includes('kn-navigation');
+      if (!isFixedLike && !isKnownHeader) continue;
+
       if (rect.bottom > maxBottom) maxBottom = rect.bottom;
     }
 
     // Clamp to something sensible.
-    const px = Math.max(0, Math.min(220, Math.round(maxBottom)));
-    return px;
+    return Math.max(0, Math.min(260, Math.round(maxBottom)));
   }
 
   async function fetchAssetUrls(appUrl) {
@@ -130,7 +149,10 @@
       // When embedded inside Knack, the General Header often overlays the top of the viewport.
       // Apply an offset so the app starts below it.
       const applyOffset = () => {
-        const topOffset = getTopOffsetPx();
+        const measured = getTopOffsetPx();
+        // If measurement fails (returns 0), fall back to a safe default that matches
+        // the current VESPA stacked header height.
+        const topOffset = measured >= 60 ? measured : 170;
         wrapper.style.paddingTop = topOffset ? `${topOffset}px` : '0px';
         wrapper.style.minHeight = topOffset ? `calc(100vh - ${topOffset}px)` : '72vh';
         try {
