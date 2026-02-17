@@ -114,22 +114,27 @@ body {
   color: #e8f7ff;
   padding: 10px 12px;
 }
-.notice-hero{
-  display:grid;
-  grid-template-columns: 1fr auto;
-  gap: 12px;
-  align-items: start;
-}
-.notice-badges{
+
+.header-badges{
   display:flex;
-  flex-direction: column;
-  gap: 8px;
-  align-items: flex-end;
-  justify-content: center;
-  padding-top: 2px;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
-.notice-badges .store-badge img{
-  height: 42px;
+.store-badge.prominent img{
+  height: 44px;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.18);
+  background: rgba(11, 19, 45, 0.8);
+}
+.store-badge.prominent.appstore img{
+  border-color: rgba(0, 245, 255, 0.72);
+  box-shadow: 0 0 16px rgba(0,245,255,0.22), 0 0 28px rgba(0,245,255,0.12);
+}
+.store-badge.prominent.playstore img{
+  border-color: rgba(255, 0, 110, 0.72);
+  box-shadow: 0 0 16px rgba(255,0,110,0.22), 0 0 28px rgba(255,0,110,0.12);
 }
 .notice a { color: #fff; text-decoration: underline; }
 .notice-head{
@@ -1725,7 +1730,7 @@ textarea, input, select {
   background: rgba(0, 0, 0, 0.65);
   display: grid;
   place-items: start center;
-  padding: 120px 16px 16px; /* keep modal under in-app header */
+  padding: calc(var(--knack-top-offset, 110px) + 20px) 16px 16px; /* keep modal under Knack header */
   z-index: 90;
 }
 .modal-card {
@@ -2239,8 +2244,7 @@ textarea, input, select {
   .layout { grid-template-columns: 1fr; }
   .forms { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; align-items: flex-start; }
-  .notice-hero{ grid-template-columns: 1fr; }
-  .notice-badges{ flex-direction: row; align-items: center; justify-content: flex-start; }
+  .header-badges{ justify-content: flex-start; }
   .leitner-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
   .card-detail-grid { grid-template-columns: 1fr; }
   .subject-modal-card {

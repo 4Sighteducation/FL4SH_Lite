@@ -34,6 +34,27 @@ function subjectLabel(row) {
         </div>
       </div>
     </div>
+
+    <div class="header-badges">
+      <a
+        :href="props.links.appStore"
+        target="_blank"
+        rel="noopener"
+        class="store-badge prominent appstore"
+        @click="emit('store-click', 'app_store')"
+      >
+        <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" />
+      </a>
+      <a
+        :href="props.links.playStore"
+        target="_blank"
+        rel="noopener"
+        class="store-badge prominent playstore"
+        @click="emit('store-click', 'play_store')"
+      >
+        <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" />
+      </a>
+    </div>
   </header>
 
   <section class="notice neon notice-hero">
@@ -55,15 +76,6 @@ function subjectLabel(row) {
           @click="emit('website-click', 'legacy_knack_flashcards')"
         >Open your cards in legacy Knack version</a>
       </div>
-    </div>
-
-    <div class="notice-badges">
-      <a :href="props.links.appStore" target="_blank" rel="noopener" class="store-badge" @click="emit('store-click', 'app_store')">
-        <img src="https://developer.apple.com/assets/elements/badges/download-on-the-app-store.svg" alt="Download on the App Store" />
-      </a>
-      <a :href="props.links.playStore" target="_blank" rel="noopener" class="store-badge" @click="emit('store-click', 'play_store')">
-        <img src="https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg" alt="Get it on Google Play" />
-      </a>
     </div>
   </section>
 </template>

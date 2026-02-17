@@ -133,7 +133,11 @@
         const topOffset = getTopOffsetPx();
         wrapper.style.paddingTop = topOffset ? `${topOffset}px` : '0px';
         wrapper.style.minHeight = topOffset ? `calc(100vh - ${topOffset}px)` : '72vh';
-        try { document.documentElement.style.scrollPaddingTop = topOffset ? `${topOffset}px` : '0px'; } catch (_) {}
+        try {
+          document.documentElement.style.scrollPaddingTop = topOffset ? `${topOffset}px` : '0px';
+          // Expose as CSS variable so fixed-position modals can also offset correctly.
+          document.documentElement.style.setProperty('--knack-top-offset', topOffset ? `${topOffset}px` : '0px');
+        } catch (_) {}
       };
       applyOffset();
       window.addEventListener('resize', applyOffset);
