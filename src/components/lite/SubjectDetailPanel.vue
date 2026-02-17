@@ -26,6 +26,7 @@ const emit = defineEmits([
   'set-active-topic-filter',
   'toggle-topic-row',
   'open-create-flow',
+  'open-card-bank',
 ])
 
 const topicSearch = ref('')
@@ -81,6 +82,12 @@ function progressPercent(count) {
         <span class="sd-action-icon">✦</span>
         <div class="sd-action-title">Create Cards</div>
         <div class="sd-action-desc">AI-generated or write your own flashcards for any topic</div>
+      </button>
+      <button class="sd-action-card bank" @click="emit('open-card-bank')">
+        <span class="sd-action-badge cards">{{ props.cards.length }} total</span>
+        <span class="sd-action-icon">📚</span>
+        <div class="sd-action-title">Card Bank</div>
+        <div class="sd-action-desc">Browse, flip, and review all your cards outside Study Mode</div>
       </button>
       <button class="sd-action-card study" @click="emit('start-study')" :disabled="props.dueCount === 0">
         <span class="sd-action-badge due">{{ props.dueCount }} due</span>

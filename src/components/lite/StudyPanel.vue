@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 const props = defineProps({
   visible: { type: Boolean, required: true },
   selectedSubject: { type: Object, default: null },
+  allCards: { type: Array, default: () => [] },
   boxStats: { type: Array, required: true },
   pulseBox: { type: Number, required: true },
   movingCardText: { type: String, required: true },
@@ -35,12 +36,6 @@ const toastTargetBox = ref(0)
 const showExplanation = ref(false)
 
 const isMcqCard = computed(() => activeMcq.value.options.length > 0)
-const cardTypeLabel = computed(() => {
-  if (isMcqCard.value) return 'Multiple choice'
-  const raw = String(props.activeStudyCard?.card_type || '').toLowerCase()
-  if (raw.includes('essay')) return 'Essay'
-  return 'Short answer'
-})
 const backBadgeLabel = computed(() => {
   if (isMcqCard.value) return 'Explanation'
   const raw = String(props.activeStudyCard?.card_type || '').toLowerCase()
@@ -53,6 +48,18 @@ const boxJourney = computed(() => {
     ...box,
     color: colors[index % colors.length],
   }))
+})
+
+const cardsByBox = computed(() => {
+  const groups = { 1: [], 2: [], 3: [], 4: [], 5: [] }
+  ;(Array.isArray(props.allCards) ? props.allCards : []).forEach((card) => {
+    const box = Math.max(1, Math.min(5, Number(card?.box_number || 1)))
+    groups[box].push(card)
+  })
+  Object.keys(groups).forEach((k) => {
+    groups[k] = groups[k].slice().sort((a, b) => String(a?.front_text || '').localeCompare(String(b?.front_text || '')))
+  })
+  return groups
 })
 
 watch(
@@ -177,13 +184,81 @@ function selfGrade(correct) {
           <small>card{{ b.count === 1 ? '' : 's' }}</small>
         </article>
       </div>
+
+      <div class="journey-panel" style="margin-top: 12px;">
+        <h3>Preview by Box</h3>
+        <small class="muted">Fronts only — a quick view of what’s coming up.</small>
+      </div>
+      <div class="cards">
+        <div v-for="box in [1,2,3,4,5]" :key="`hubbox-${box}`" class="panel neon" style="padding: 12px; margin-bottom: 10px;">
+          <div class="panel-head" style="margin-bottom: 8px;">
+            <h3 style="margin:0;">Box {{ box }}</h3>
+            <small class="muted">{{ cardsByBox[box].length }} cards</small>
+          </div>
+          <div class="topic-tree-list" style="margin-top: 0;">
+            <div v-if="cardsByBox[box].length === 0" class="muted" style="padding: 6px 2px;">No cards in this box yet.</div>
+            <div
+              v-for="card in cardsByBox[box].slice(0, 5)"
+              :key="`hubfront-${box}-${card.id}`"
+              class="sd-topic-row"
+              style="cursor: default;"
+            >
+              <span class="sd-topic-name" :data-depth="0">{{ props.shortLine(card.front_text, 96) }}</span>
+              <span class="sd-topic-meta">{{ card.topic_code || 'General' }}</span>
+            </div>
+            <div v-if="cardsByBox[box].length > 5" class="muted" style="padding: 6px 2px;">
+              Showing 5 of {{ cardsByBox[box].length }}. Use <strong>Card Bank</strong> to browse everything.
+            </div>
+          </div>
+        </div>
+      </div>
     </template>
     <template v-else-if="props.sessionDone">
       <div class="notice neon">
-        Session complete. You reviewed {{ props.sessionReviewed }} cards.
+        <strong>Session complete.</strong> You reviewed {{ props.sessionReviewed }} cards.
         <div class="toolbar" style="margin-top:8px;">
           <a class="mini-btn active" :href="props.links.appStore" target="_blank" rel="noopener" @click="emit('store-click', 'app_store')">Get iOS App</a>
           <a class="mini-btn active" :href="props.links.playStore" target="_blank" rel="noopener" @click="emit('store-click', 'play_store')">Get Android App</a>
+        </div>
+      </div>
+
+      <div class="journey-panel" style="margin-top: 12px;">
+        <h3>Tomorrow’s Preview</h3>
+        <small class="muted">Fronts only — this is your “what’s coming up” view by Leitner box.</small>
+      </div>
+
+      <div class="journey-grid" style="grid-template-columns: repeat(5, minmax(120px, 1fr));">
+        <article v-for="b in boxJourney" :key="`done-${b.box}`" class="journey-card" :style="{ borderColor: `${b.color}99` }">
+          <div class="journey-title">
+            <strong>Box {{ b.box }}</strong>
+            <span>{{ b.interval }}</span>
+          </div>
+          <div class="journey-count">{{ b.count }}</div>
+          <small>card{{ b.count === 1 ? '' : 's' }}</small>
+        </article>
+      </div>
+
+      <div class="cards" style="margin-top: 10px;">
+        <div v-for="box in [1,2,3,4,5]" :key="`boxlist-${box}`" class="panel neon" style="padding: 12px; margin-bottom: 10px;">
+          <div class="panel-head" style="margin-bottom: 8px;">
+            <h3 style="margin:0;">Box {{ box }}</h3>
+            <small class="muted">{{ cardsByBox[box].length }} cards</small>
+          </div>
+          <div class="topic-tree-list" style="margin-top: 0;">
+            <div v-if="cardsByBox[box].length === 0" class="muted" style="padding: 6px 2px;">No cards in this box yet.</div>
+            <div
+              v-for="card in cardsByBox[box].slice(0, 8)"
+              :key="`boxfront-${box}-${card.id}`"
+              class="sd-topic-row"
+              style="cursor: default;"
+            >
+              <span class="sd-topic-name" :data-depth="0">{{ props.shortLine(card.front_text, 96) }}</span>
+              <span class="sd-topic-meta">{{ card.topic_code || 'General' }}</span>
+            </div>
+            <div v-if="cardsByBox[box].length > 8" class="muted" style="padding: 6px 2px;">
+              Showing 8 of {{ cardsByBox[box].length }}. Use <strong>Card Bank</strong> to browse everything.
+            </div>
+          </div>
         </div>
       </div>
     </template>
@@ -211,7 +286,6 @@ function selfGrade(correct) {
 
           <!-- MCQ: no flip, inline reveal -->
           <div v-if="isMcqCard" class="mcq-card-stage">
-            <span class="card-type-badge">{{ cardTypeLabel }}</span>
             <div class="mcq-card-body">
               <div class="mcq-question">{{ props.activeStudyCard.front_text }}</div>
               <div class="mcq-options">
@@ -244,7 +318,6 @@ function selfGrade(correct) {
           <div v-else class="flip-container">
             <div class="flip-card" :class="{ flipped: isFlipped }" @click="toggleFlip">
               <div class="flip-face flip-front">
-                <span class="card-type-badge">{{ cardTypeLabel }}</span>
                 <div class="face-body">
                   <span class="face-side-label front-label">Question</span>
                   <div class="face-question">{{ props.activeStudyCard.front_text }}</div>
@@ -252,12 +325,11 @@ function selfGrade(correct) {
                 <div class="flip-hint">Tap anywhere to flip</div>
               </div>
               <div class="flip-face flip-back" :class="{ essay: String(props.activeStudyCard?.card_type || '').toLowerCase().includes('essay') }">
-                <span class="card-type-badge" style="color: var(--success)">{{ backBadgeLabel }}</span>
                 <div class="face-body">
                   <span class="face-side-label back-label">{{ backBadgeLabel }}</span>
                   <div class="face-answer">{{ props.activeStudyCard.back_text }}</div>
                 </div>
-                <div class="flip-hint">Tap to flip back</div>
+                <div class="flip-hint">Mark correct or incorrect to continue</div>
               </div>
             </div>
           </div>

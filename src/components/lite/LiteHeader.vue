@@ -28,7 +28,15 @@ const emit = defineEmits(['store-click', 'website-click'])
   </header>
 
   <section class="notice neon">
-    <strong>FL4SH Lite</strong> is limited to {{ props.limits.max_subjects }} subjects and {{ props.limits.max_cards_per_subject }} AI-generated cards per subject (manual cards are unlimited).
-    For full mobile-native experience, visit <a :href="props.links.website" target="_blank" rel="noopener" @click="emit('website-click', 'header_notice')">fl4shcards.com</a>.
+    <div class="notice-head">Stop revising content that won’t appear in your exam.</div>
+    <div class="notice-body">
+      <strong>FL4SH</strong> is the full AI-powered flashcard app built for UK qualifications. Pick your subject and exam board and revise cards mapped to the official specification
+      (AQA, Pearson Edexcel, OCR, WJEC/Eduqas, CCEA and <strong>SQA</strong> National 5 / Higher / Advanced Higher).
+      Create cards with AI, write them manually, or generate from an image — then study with spaced repetition, XP modes, and optional voice answers with AI feedback.
+    </div>
+    <div class="notice-foot">
+      <strong>Lite limits:</strong> {{ props.limits.max_subjects }} subjects · {{ props.limits.max_cards_per_subject }} AI cards per subject (manual unlimited). ·
+      <a :href="props.links.website" target="_blank" rel="noopener" @click="emit('website-click', 'header_notice')">Upgrade to full FL4SH → fl4shcards.com</a>
+    </div>
   </section>
 </template>

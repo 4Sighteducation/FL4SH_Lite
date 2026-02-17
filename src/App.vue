@@ -73,6 +73,9 @@ const previewFlippedByKey = ref({})
 const previewSelectionByKey = ref({})
 const previewMetaCard = ref(null)
 const previewIndex = ref(0)
+const cardBankOpen = ref(false)
+const cardBankSearch = ref('')
+const cardBankBox = ref(0)
 const {
   selectedSubject,
   dueCards,
@@ -687,6 +690,32 @@ function openCardModal(card) {
   cardModal.selectedCorrect = null
 }
 
+function openCardBank() {
+  cardBankSearch.value = ''
+  cardBankBox.value = 0
+  cardBankOpen.value = true
+}
+
+function closeCardBank() {
+  cardBankOpen.value = false
+  cardBankSearch.value = ''
+  cardBankBox.value = 0
+}
+
+const cardBankCards = computed(() => {
+  const q = cardBankSearch.value.trim().toLowerCase()
+  const box = Number(cardBankBox.value || 0)
+  return (state.cards || [])
+    .filter((c) => !box || Number(c?.box_number || 1) === box)
+    .filter((c) => !q || String(c?.front_text || '').toLowerCase().includes(q) || String(c?.topic_code || '').toLowerCase().includes(q))
+    .sort((a, b) => {
+      const aBox = Number(a?.box_number || 1)
+      const bBox = Number(b?.box_number || 1)
+      if (aBox !== bBox) return aBox - bBox
+      return String(a?.front_text || '').localeCompare(String(b?.front_text || ''))
+    })
+})
+
 function sortedCardsForTopic(topicCode) {
   const now = Date.now()
   return state.cards
@@ -931,11 +960,13 @@ onMounted(loadContext)
         @set-active-topic-filter="activeTopicFilter = $event"
         @toggle-topic-row="toggleTopicRow"
         @open-create-flow="openCreateFlow($event)"
+        @open-card-bank="openCardBank"
       />
 
       <StudyPanel
         :visible="view === 'study'"
         :selected-subject="selectedSubject"
+        :all-cards="state.cards"
         :box-stats="boxStats"
         :pulse-box="pulseBox"
         :moving-card-text="movingCardText"
@@ -959,6 +990,43 @@ onMounted(loadContext)
         @store-click="onStudyStoreClick"
       />
     </main>
+
+    <div class="modal" v-if="cardBankOpen">
+      <div class="modal-card neon create-flow-modal">
+        <div class="panel-head">
+          <h3>Card Bank</h3>
+          <button class="mini-btn" @click="closeCardBank">Close</button>
+        </div>
+        <p class="muted">Browse all cards in this subject. Click one to flip and view details.</p>
+        <div class="modal-search-row">
+          <input v-model="cardBankSearch" placeholder="Search cards or topics..." />
+          <select v-model="cardBankBox" style="width: 140px; margin-bottom: 0;">
+            <option :value="0">All boxes</option>
+            <option :value="1">Box 1</option>
+            <option :value="2">Box 2</option>
+            <option :value="3">Box 3</option>
+            <option :value="4">Box 4</option>
+            <option :value="5">Box 5</option>
+          </select>
+        </div>
+        <div class="cards">
+          <button
+            v-for="card in cardBankCards"
+            :key="`bank-${card.id}`"
+            class="subject-item picker"
+            style="text-align:left;"
+            @click="openCardModal(card)"
+          >
+            <div class="subject-name">{{ shortLine(card.front_text, 84) }}</div>
+            <div class="subject-meta">
+              Box {{ card.box_number || 1 }} · {{ card.topic_code || 'General' }} ·
+              <span :class="isCardDue(card) ? 'due-tag' : 'scheduled-tag'">{{ cardDueBadge(card) }}</span>
+            </div>
+          </button>
+          <div v-if="!cardBankCards.length" class="muted">No cards match your filters yet.</div>
+        </div>
+      </div>
+    </div>
 
     <UpsellModal
       :visible="state.showUpsell"

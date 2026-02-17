@@ -67,6 +67,26 @@ body {
   padding: 10px 12px;
 }
 .notice a { color: #fff; text-decoration: underline; }
+.notice-head{
+  font-weight: 900;
+  font-size: 1rem;
+  letter-spacing: -0.15px;
+  margin-bottom: 4px;
+}
+.notice-body{
+  color: rgba(230, 246, 255, 0.92);
+  line-height: 1.55;
+}
+.notice-foot{
+  margin-top: 6px;
+  color: rgba(175, 196, 235, 0.92);
+  font-size: 0.82rem;
+}
+.notice-foot a{
+  color: #ffffff;
+  font-weight: 900;
+  text-decoration: underline;
+}
 
 .layout {
   margin-top: 10px;
@@ -383,7 +403,7 @@ h2, h3, h4 { margin: 0 0 8px; }
 .sd-action-cards{
   margin-top: 12px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
 }
 .sd-action-card{
@@ -413,6 +433,10 @@ h2, h3, h4 { margin: 0 0 8px; }
 .sd-action-card.study{
   background: linear-gradient(145deg, rgba(0,245,255,0.10), rgba(12,19,40,0.6));
   border-color: rgba(0,245,255,0.22);
+}
+.sd-action-card.bank{
+  background: linear-gradient(145deg, rgba(0, 255, 136, 0.08), rgba(12,19,40,0.6));
+  border-color: rgba(0, 255, 136, 0.18);
 }
 .sd-action-icon{
   font-size: 1.55rem;
@@ -1544,20 +1568,20 @@ textarea, input, select {
   pointer-events: none;
   z-index: 60;
   display:grid;
-  place-items: start center;
-  padding-top: 24px;
+  place-items: center;
+  padding: 18px;
 }
 .study-outcome-card{
   pointer-events:none;
   border-radius: 14px;
-  padding: 10px 14px;
+  padding: 14px 16px;
   border: 1px solid rgba(100,130,200,0.18);
   background: rgba(10,16,32,0.72);
   backdrop-filter: blur(10px);
   animation: fadeSlideUp .35s ease;
   display:grid;
   gap: 2px;
-  min-width: 220px;
+  width: min(520px, 92vw);
   text-align:center;
 }
 .study-outcome-card.correct{
@@ -1574,6 +1598,7 @@ textarea, input, select {
   font-weight: 900;
   color: #eaf0ff;
   letter-spacing: -0.1px;
+  font-size: 1.05rem;
 }
 .study-outcome-sub{
   font-family: "Space Mono", monospace;
