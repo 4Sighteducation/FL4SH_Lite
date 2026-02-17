@@ -25,6 +25,13 @@ body {
 }
 .page { min-height: 100vh; padding: 14px; }
 
+/* Scroll lock when any modal is open (set via App.vue) */
+html.fl4sh-lite-scrolllock,
+body.fl4sh-lite-scrolllock,
+#knack-body.fl4sh-lite-scrolllock {
+  overflow: hidden !important;
+}
+
 /* -----------------------------
    Knack embed readability fixes
    -----------------------------
@@ -1726,12 +1733,14 @@ textarea, input, select {
 
 .modal {
   position: fixed;
-  inset: 0;
+  inset: var(--knack-top-offset, 140px) 0 0 0;
   background: rgba(0, 0, 0, 0.65);
   display: grid;
   place-items: start center;
-  padding: calc(var(--knack-top-offset, 110px) + 20px) 16px 16px; /* keep modal under Knack header */
+  padding: 16px;
   z-index: 90;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .modal-card {
   width: min(620px, 100%);

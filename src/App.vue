@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
 import { LINKS, callFn } from './lib/api'
 import CardDetailModal from './components/lite/CardDetailModal.vue'
 import LiteHeader from './components/lite/LiteHeader.vue'
@@ -109,6 +109,35 @@ const confirmState = reactive({
   busy: false,
 })
 let confirmResolver = null
+
+const anyModalOpen = computed(() => {
+  return Boolean(
+    state.showSubjectModal ||
+      state.showUpsell ||
+      confirmState.open ||
+      cardModal.open ||
+      createFlowOpen.value ||
+      cardBankOpen.value ||
+      cardBankMetaOpen.value ||
+      boxPreviewOpen.value
+  )
+})
+
+watchEffect(() => {
+  const lock = anyModalOpen.value
+  const html = document.documentElement
+  const body = document.body
+  const knackBody = document.getElementById('knack-body')
+  if (lock) {
+    html.classList.add('fl4sh-lite-scrolllock')
+    body.classList.add('fl4sh-lite-scrolllock')
+    if (knackBody) knackBody.classList.add('fl4sh-lite-scrolllock')
+  } else {
+    html.classList.remove('fl4sh-lite-scrolllock')
+    body.classList.remove('fl4sh-lite-scrolllock')
+    if (knackBody) knackBody.classList.remove('fl4sh-lite-scrolllock')
+  }
+})
 
 function openConfirm(payload = {}) {
   confirmState.title = String(payload.title || 'Are you sure?')
