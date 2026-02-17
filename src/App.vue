@@ -10,7 +10,7 @@ import SubjectSidebar from './components/lite/SubjectSidebar.vue'
 import SubjectSelectionModal from './components/lite/SubjectSelectionModal.vue'
 import UpsellModal from './components/lite/UpsellModal.vue'
 import ConfirmModal from './components/lite/ConfirmModal.vue'
-import { examLevelChoices } from './features/lite/constants'
+import { courseTypeChoices, examLevelChoices } from './features/lite/constants'
 import { useLiteComputed } from './features/lite/composables/useLiteComputed'
 import { createInitialCardModal, createInitialState } from './features/lite/state'
 import {
@@ -61,6 +61,7 @@ const movingCardText = ref('')
 const currentUpsellPlacement = ref('general')
 const modalLevel = ref('')
 const modalSearch = ref('')
+const modalCourseType = ref('all')
 const subjectColors = ref({})
 const topicTree = ref([])
 const expandedTopics = ref({})
@@ -317,8 +318,24 @@ function openSubjectModal() {
   subjectDraft.value = uniqueKeys(state.selectedSubjects.map((s) => s.subject_key))
   modalSearch.value = ''
   modalLevel.value = examLevelChoices[0]?.label || ''
+  modalCourseType.value = 'all'
   state.showSubjectModal = true
   trackEventSafe('subject_modal_open', 'subject_modal', { preselected: subjectDraft.value.length })
+}
+
+function setModalCourseType(courseTypeId) {
+  modalCourseType.value = String(courseTypeId || 'all')
+  const choice = courseTypeChoices.find((c) => c.id === modalCourseType.value) || courseTypeChoices[0]
+  const allowed = Array.isArray(choice?.levels) ? choice.levels : []
+
+  // Keep modalLevel aligned with the course type filter.
+  if (!allowed.length || allowed.includes('All levels')) {
+    if (!modalLevel.value) modalLevel.value = 'All levels'
+    return
+  }
+  if (!allowed.includes(modalLevel.value)) {
+    modalLevel.value = allowed[0] || 'All levels'
+  }
 }
 function closeSubjectModal() {
   state.showSubjectModal = false
@@ -1197,6 +1214,7 @@ onMounted(loadContext)
   <div class="page">
     <LiteHeader
       :user="state.user"
+      :subjects="state.selectedSubjects"
       :limits="state.limits"
       :links="LINKS"
       @store-click="onHeaderStoreClick"
@@ -1502,6 +1520,8 @@ onMounted(loadContext)
 
     <SubjectSelectionModal
       :visible="state.showSubjectModal"
+      :course-type-choices="courseTypeChoices"
+      :modal-course-type="modalCourseType"
       :exam-level-choices="examLevelChoices"
       :modal-level="modalLevel"
       :modal-search="modalSearch"
@@ -1511,6 +1531,7 @@ onMounted(loadContext)
       :max-subjects="state.limits.max_subjects"
       :busy="state.busy"
       @close="closeSubjectModal"
+      @update:modal-course-type="setModalCourseType"
       @update:modal-level="modalLevel = $event"
       @update:modal-search="modalSearch = $event"
       @toggle-subject="selectSubjectFromModal"

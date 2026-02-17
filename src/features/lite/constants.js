@@ -10,6 +10,15 @@ export const examLevelChoices = [
   { label: 'Higher / Advanced Higher', values: ['HIGHER', 'ADVANCED_HIGHER', 'SQA_HIGHER'] },
 ]
 
+// Used by the subject selection wizard (Manage modal)
+export const courseTypeChoices = [
+  { id: 'all', label: 'All course types', levels: ['All levels'] },
+  { id: 'academic', label: 'Academic', levels: ['GCSE', 'A Level'] },
+  { id: 'international', label: 'International', levels: ['International GCSE', 'International A Level'] },
+  { id: 'vocational', label: 'Vocational', levels: ['Vocational Level 2', 'Vocational Level 3'] },
+  { id: 'scotland', label: 'Scotland (SQA)', levels: ['National 5', 'Higher / Advanced Higher'] },
+]
+
 export const boxConfig = [
   { box: 1, title: 'New', interval: '1d' },
   { box: 2, title: 'Warm', interval: '2d' },

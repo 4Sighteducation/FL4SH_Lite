@@ -25,6 +25,40 @@ body {
 }
 .page { min-height: 100vh; padding: 14px; }
 
+/* -----------------------------
+   Knack embed readability fixes
+   -----------------------------
+   When running inside Knack, parent containers often set a low-contrast text color.
+   Explicitly pin the base text color inside the FL4SH Lite mount.
+*/
+.fl4sh-lite-host,
+.fl4sh-lite-host #app,
+.fl4sh-lite-host .page {
+  color: #ffffff !important;
+}
+.fl4sh-lite-host p,
+.fl4sh-lite-host span,
+.fl4sh-lite-host small,
+.fl4sh-lite-host label,
+.fl4sh-lite-host h1,
+.fl4sh-lite-host h2,
+.fl4sh-lite-host h3,
+.fl4sh-lite-host h4 {
+  color: inherit;
+}
+.fl4sh-lite-host .muted,
+.fl4sh-lite-host .subject-meta,
+.fl4sh-lite-host .meta,
+.fl4sh-lite-host .notice-body,
+.fl4sh-lite-host .notice-foot,
+.fl4sh-lite-host .study-outcome-sub {
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+.fl4sh-lite-host .subject-item.picker.locked .subject-name,
+.fl4sh-lite-host .subject-item.picker.locked .subject-meta {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
 .neon {
   border: 1px solid rgba(0, 245, 255, 0.42);
   box-shadow: 0 0 20px rgba(0, 245, 255, 0.15), 0 0 28px rgba(255, 0, 110, 0.08);
@@ -40,6 +74,20 @@ body {
   padding: 10px 14px;
 }
 .brand-wrap { display: flex; align-items: center; gap: 10px; }
+.brand-text{ min-width: 0; }
+.subject-chip-row{ display:flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.subject-chip{
+  display:inline-flex;
+  align-items:center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,245,255,0.28);
+  background: rgba(11, 18, 44, 0.45);
+  font-weight: 900;
+  font-size: 0.72rem;
+  letter-spacing: 0.15px;
+  color: rgba(255,255,255,0.96);
+}
 .logo-mark {
   width: 42px; height: 42px; border-radius: 11px;
   background: #0d1838;
@@ -53,7 +101,7 @@ body {
   object-fit: cover;
 }
 .logo { font-size: 1.3rem; font-weight: 900; letter-spacing: .2px; }
-.meta { color: #9fb1d7; font-size: .82rem; }
+.meta { color: rgba(255,255,255,0.92); font-size: .82rem; }
 
 .badge-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .store-badge { display: inline-flex; }
@@ -66,6 +114,23 @@ body {
   color: #e8f7ff;
   padding: 10px 12px;
 }
+.notice-hero{
+  display:grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: start;
+}
+.notice-badges{
+  display:flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+  justify-content: center;
+  padding-top: 2px;
+}
+.notice-badges .store-badge img{
+  height: 42px;
+}
 .notice a { color: #fff; text-decoration: underline; }
 .notice-head{
   font-weight: 900;
@@ -74,12 +139,12 @@ body {
   margin-bottom: 4px;
 }
 .notice-body{
-  color: rgba(230, 246, 255, 0.92);
+  color: rgba(255, 255, 255, 0.92);
   line-height: 1.55;
 }
 .notice-foot{
   margin-top: 6px;
-  color: rgba(175, 196, 235, 0.92);
+  color: rgba(255, 255, 255, 0.92);
   font-size: 0.82rem;
 }
 .notice-foot a{
@@ -130,10 +195,7 @@ h2, h3, h4 { margin: 0 0 8px; }
   font-weight: 700;
   letter-spacing: 0.1px;
 }
-.subject-meta {
-  color: #9db0de;
-  letter-spacing: 0.25px;
-}
+.subject-meta { color: rgba(255,255,255,0.92); letter-spacing: 0.25px; }
 .subject-count {
   color: #cde8ff;
   font-weight: 600;
@@ -146,7 +208,7 @@ h2, h3, h4 { margin: 0 0 8px; }
   border-color: rgba(0, 245, 255, 0.8);
   box-shadow: 0 0 12px rgba(0, 245, 255, 0.25);
 }
-.subject-item small { color: #9db0de; display: block; }
+.subject-item small { color: rgba(255,255,255,0.92); display: block; }
 .subject-item.picker:hover {
   border-color: #7fa8ff;
 }
@@ -1646,7 +1708,7 @@ textarea, input, select {
   transition: width .22s ease;
 }
 
-.muted { color: #a7b6df; }
+.muted { color: rgba(255,255,255,0.92); }
 .error {
   margin-top: 8px;
   border: 1px solid #7d2f54;
@@ -1662,8 +1724,8 @@ textarea, input, select {
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
   display: grid;
-  place-items: center;
-  padding: 16px;
+  place-items: start center;
+  padding: 120px 16px 16px; /* keep modal under in-app header */
   z-index: 90;
 }
 .modal-card {
@@ -2114,6 +2176,40 @@ textarea, input, select {
   grid-template-rows: auto auto auto auto auto 1fr auto auto;
   gap: 8px;
 }
+.wizard-block{
+  border: 1px solid rgba(55, 86, 150, 0.55);
+  background: rgba(11, 18, 44, 0.35);
+  border-radius: 12px;
+  padding: 10px 10px 8px;
+}
+.wizard-title{
+  font-weight: 900;
+  letter-spacing: -0.1px;
+  margin-bottom: 8px;
+}
+.wizard-chip-row{
+  display:flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.chip-btn{
+  appearance:none;
+  border: 1px solid rgba(0, 245, 255, 0.36);
+  background: rgba(12, 20, 46, 0.55);
+  color: rgba(255,255,255,0.95);
+  font-weight: 900;
+  padding: 8px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.chip-btn:hover{
+  border-color: rgba(0, 245, 255, 0.72);
+  box-shadow: 0 0 12px rgba(0, 245, 255, 0.14);
+}
+.chip-btn.active{
+  border-color: rgba(255, 0, 110, 0.78);
+  background: linear-gradient(135deg, rgba(255, 0, 110, 0.20), rgba(0, 245, 255, 0.12));
+}
 .subject-modal-card .subject-pick {
   margin-top: 0;
   display: grid;
@@ -2143,6 +2239,8 @@ textarea, input, select {
   .layout { grid-template-columns: 1fr; }
   .forms { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; align-items: flex-start; }
+  .notice-hero{ grid-template-columns: 1fr; }
+  .notice-badges{ flex-direction: row; align-items: center; justify-content: flex-start; }
   .leitner-grid { grid-template-columns: repeat(2, minmax(130px, 1fr)); }
   .card-detail-grid { grid-template-columns: 1fr; }
   .subject-modal-card {
