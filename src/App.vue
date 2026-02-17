@@ -9,6 +9,7 @@ import SubjectHomePanel from './components/lite/SubjectHomePanel.vue'
 import SubjectSidebar from './components/lite/SubjectSidebar.vue'
 import SubjectSelectionModal from './components/lite/SubjectSelectionModal.vue'
 import UpsellModal from './components/lite/UpsellModal.vue'
+import ConfirmModal from './components/lite/ConfirmModal.vue'
 import { examLevelChoices } from './features/lite/constants'
 import { useLiteComputed } from './features/lite/composables/useLiteComputed'
 import { createInitialCardModal, createInitialState } from './features/lite/state'
@@ -96,6 +97,37 @@ const boxPreviewOpen = ref(false)
 const boxPreviewBox = ref(1)
 const boxPreviewIndex = ref(0)
 const boxPreviewCardIds = ref([])
+
+const confirmState = reactive({
+  open: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  cancelText: 'Cancel',
+  tone: 'danger',
+  busy: false,
+})
+let confirmResolver = null
+
+function openConfirm(payload = {}) {
+  confirmState.title = String(payload.title || 'Are you sure?')
+  confirmState.message = String(payload.message || '')
+  confirmState.confirmText = String(payload.confirmText || 'Confirm')
+  confirmState.cancelText = String(payload.cancelText || 'Cancel')
+  confirmState.tone = String(payload.tone || 'danger')
+  confirmState.busy = false
+  confirmState.open = true
+  return new Promise((resolve) => {
+    confirmResolver = resolve
+  })
+}
+function closeConfirm(result) {
+  confirmState.open = false
+  confirmState.busy = false
+  const resolve = confirmResolver
+  confirmResolver = null
+  if (typeof resolve === 'function') resolve(Boolean(result))
+}
 const {
   selectedSubject,
   dueCards,
@@ -424,11 +456,16 @@ async function saveSubjects() {
         .filter((s) => removedKeys.includes(s.subject_key))
         .map((s) => s.subject_name || s.subject_key)
         .filter(Boolean)
-      const confirmed = window.confirm(
-        `You are removing ${removedKeys.length} subject${removedKeys.length === 1 ? '' : 's'}:\n\n` +
+      const confirmed = await openConfirm({
+        title: 'Remove subject(s)?',
+        message:
+          `You are removing ${removedKeys.length} subject${removedKeys.length === 1 ? '' : 's'}:\n\n` +
           `${removedNames.slice(0, 6).join('\n')}${removedNames.length > 6 ? '\n…' : ''}\n\n` +
-          `This will permanently delete ALL cards for the removed subject(s) from FL4SH Lite. This cannot be undone.\n\nContinue?`
-      )
+          `This will permanently delete ALL cards for the removed subject(s) from FL4SH Lite. This cannot be undone.`,
+        confirmText: 'Remove subjects',
+        cancelText: 'Cancel',
+        tone: 'danger',
+      })
       if (!confirmed) return
     }
 
@@ -461,10 +498,15 @@ async function deleteSubject(subjectKey) {
   const subject = state.selectedSubjects.find((s) => s.subject_key === key)
   const name = subject?.subject_name || key
 
-  const confirmed = window.confirm(
-    `Delete "${name}" from FL4SH Lite?\n\n` +
-      `This will permanently delete ALL cards saved in this subject (Card Bank + Study schedule). This cannot be undone.\n\nContinue?`
-  )
+  const confirmed = await openConfirm({
+    title: 'Delete subject?',
+    message:
+      `Delete "${name}" from FL4SH Lite?\n\n` +
+      `This will permanently delete ALL cards saved in this subject (Card Bank + Study schedule). This cannot be undone.`,
+    confirmText: 'Delete subject',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
   if (!confirmed) return
 
   state.busy = true
@@ -1100,9 +1142,15 @@ async function generateCards() {
 
 async function requestDeleteCard(cardId) {
   if (!cardId || state.busy) return
-  const confirmed = window.confirm(
-    'Delete this card permanently from FL4SH Lite?\n\nThis removes it from your card bank and study schedule. This cannot be undone.'
-  )
+  const confirmed = await openConfirm({
+    title: 'Delete card?',
+    message:
+      'Delete this card permanently from FL4SH Lite?\n\n' +
+      'This removes it from your card bank and study schedule. This cannot be undone.',
+    confirmText: 'Delete card',
+    cancelText: 'Cancel',
+    tone: 'danger',
+  })
   if (!confirmed) return
   return await deleteCard(cardId)
 }
@@ -1670,6 +1718,18 @@ onMounted(loadContext)
       @delete-card="requestDeleteCard(cardModal.card?.id).then(closeCardModal)"
       @prev-card="openPrevModalCard"
       @next-card="openNextModalCard"
+    />
+
+    <ConfirmModal
+      :visible="confirmState.open"
+      :title="confirmState.title"
+      :message="confirmState.message"
+      :confirm-text="confirmState.confirmText"
+      :cancel-text="confirmState.cancelText"
+      :tone="confirmState.tone"
+      :busy="confirmState.busy"
+      @cancel="closeConfirm(false)"
+      @confirm="closeConfirm(true)"
     />
   </div>
 </template>
