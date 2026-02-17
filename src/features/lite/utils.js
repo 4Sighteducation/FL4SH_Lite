@@ -45,14 +45,98 @@ export function flattenTopicRows(nodes, expandedTopics, depth = 0, out = []) {
 }
 
 export function parseMcq(card) {
-  const blob = `${card?.front_text || ''}\n${card?.back_text || ''}`
-  const lines = blob.split('\n').map((l) => l.trim()).filter(Boolean)
-  const options = lines
-    .map((l) => {
-      const m = l.match(/^([A-D])[)\].:\-]\s+(.+)$/i)
-      return m ? { key: m[1].toUpperCase(), text: m[2] } : null
-    })
+  const backText = String(card?.back_text || '')
+  const lines = backText
+    .split('\n')
+    .map((l) => String(l || '').trim())
     .filter(Boolean)
-  const correct = (blob.match(/correct\s*answer\s*[:\-]?\s*([A-D])/i) || [])[1] || ''
-  return { options, correct: String(correct || '').toUpperCase() }
+
+  const options = []
+  const infoLines = []
+  const relatedTopics = []
+  let correct = ''
+  let inRelated = false
+
+  lines.forEach((line) => {
+    const opt = line.match(/^([A-D])[)\].:\-]\s+(.+)$/i)
+    if (opt) {
+      options.push({ key: String(opt[1] || '').toUpperCase(), text: String(opt[2] || '').trim() })
+      return
+    }
+    const correctMatch = line.match(/^correct\s*answer\s*[:\-]?\s*([A-D])$/i)
+    if (correctMatch) {
+      correct = String(correctMatch[1] || '').toUpperCase()
+      return
+    }
+    // Ignore headings like "Detailed answer:" in info parsing.
+    if (/^detailed\s*answer\s*[:\-]?$/i.test(line)) return
+    if (/^related\s*topics\s*[:\-]?$/i.test(line)) {
+      inRelated = true
+      return
+    }
+    if (inRelated) {
+      const bullet = line.replace(/^[\-•]\s*/, '').trim()
+      if (bullet) relatedTopics.push(bullet)
+      return
+    }
+    infoLines.push(line)
+  })
+
+  const info = infoLines.join('\n').trim()
+  return { options, correct: String(correct || '').toUpperCase(), info, relatedTopics }
+}
+
+export function parseBackTextSections(card) {
+  const text = String(card?.back_text || '')
+  const out = {
+    answer: '',
+    detailed: '',
+    relatedTopics: [],
+    raw: text,
+  }
+  if (!text.trim()) return out
+
+  // Normalise line breaks and split into sections.
+  const lines = text.split('\n').map((l) => String(l || '').trim())
+  let mode = 'unknown' // unknown | answer | detailed | related
+  const answerLines = []
+  const detailedLines = []
+  const related = []
+
+  lines.forEach((line) => {
+    const l = line.trim()
+    if (!l) return
+    if (/^answer\s*[:\-]?$/i.test(l)) {
+      mode = 'answer'
+      return
+    }
+    if (/^detailed\s*answer\s*[:\-]?$/i.test(l)) {
+      mode = 'detailed'
+      return
+    }
+    if (/^related\s*topics\s*[:\-]?$/i.test(l)) {
+      mode = 'related'
+      return
+    }
+    if (mode === 'related') {
+      const bullet = l.replace(/^[\-•]\s*/, '').trim()
+      if (bullet) related.push(bullet)
+      return
+    }
+    if (mode === 'detailed') {
+      detailedLines.push(l)
+      return
+    }
+    if (mode === 'answer') {
+      answerLines.push(l)
+      return
+    }
+    // Fallback: if no explicit headings, treat as "detailed" content.
+    detailedLines.push(l)
+  })
+
+  out.answer = answerLines.join('\n').trim()
+  out.detailed = detailedLines.join('\n').trim()
+  out.relatedTopics = related
+  return out
 }

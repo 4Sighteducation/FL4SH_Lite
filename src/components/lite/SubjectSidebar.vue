@@ -1,4 +1,7 @@
 <script setup>
+import { ref } from 'vue'
+import SubjectThemePicker from './SubjectThemePicker.vue'
+
 const props = defineProps({
   selectedSubjects: { type: Array, required: true },
   allSelectedSubjectsLength: { type: Number, required: true },
@@ -6,18 +9,28 @@ const props = defineProps({
   limits: { type: Object, required: true },
   subjectSearch: { type: String, required: true },
   getSubjectColor: { type: Function, required: true },
+  getSubjectTheme: { type: Function, required: true },
 })
 
 const emit = defineEmits(['manage-subjects', 'open-subject', 'set-subject-color', 'update:subject-search'])
 
-function onColorInput(subjectKey, event) {
-  emit('set-subject-color', {
-    subjectKey,
-    color: event?.target?.value || '#7c4dff',
-  })
-}
 function onSearchInput(event) {
   emit('update:subject-search', event?.target?.value || '')
+}
+
+const themePickerSubjectKey = ref('')
+
+function openThemePicker(subjectKey) {
+  themePickerSubjectKey.value = String(subjectKey || '').trim()
+}
+function closeThemePicker() {
+  themePickerSubjectKey.value = ''
+}
+function pickTheme(theme) {
+  const subjectKey = themePickerSubjectKey.value
+  if (!subjectKey) return
+  emit('set-subject-color', { subjectKey, color: theme })
+  closeThemePicker()
 }
 </script>
 
@@ -41,19 +54,17 @@ function onSearchInput(event) {
         class="subject-card"
         :class="{ active: props.selectedSubjectKey === s.subject_key }"
         @click="emit('open-subject', s.subject_key)"
-        :style="{ borderColor: props.getSubjectColor(s.subject_key) }"
+        :style="{
+          borderColor: props.getSubjectColor(s.subject_key),
+          backgroundImage: props.getSubjectTheme(s.subject_key)?.gradient || 'none',
+        }"
       >
         <span class="subject-name">{{ s.subject_name }}</span>
         <small class="subject-meta">{{ s.exam_board }} · {{ s.qualification_type }}</small>
         <small class="subject-count">{{ s.card_count || 0 }} total cards</small>
         <label class="subject-color-row">
-          <span>Color</span>
-          <input
-            type="color"
-            class="subject-color-input"
-            :value="props.getSubjectColor(s.subject_key)"
-            @input.stop="onColorInput(s.subject_key, $event)"
-          />
+          <span>Theme</span>
+          <button class="mini-btn ghost" @click.stop="openThemePicker(s.subject_key)">Choose</button>
         </label>
       </button>
       <div v-if="props.allSelectedSubjectsLength > 0 && !props.selectedSubjects.length" class="muted">
@@ -62,4 +73,12 @@ function onSearchInput(event) {
       <div v-if="props.allSelectedSubjectsLength === 0" class="muted">No subjects selected yet.</div>
     </div>
   </aside>
+
+  <SubjectThemePicker
+    :visible="Boolean(themePickerSubjectKey)"
+    :subject-name="props.selectedSubjects.find((x) => x.subject_key === themePickerSubjectKey)?.subject_name || ''"
+    :current-theme="props.getSubjectTheme(themePickerSubjectKey)"
+    @close="closeThemePicker"
+    @select="pickTheme"
+  />
 </template>

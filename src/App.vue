@@ -28,10 +28,12 @@ import {
   formatDateTime,
   isCardDue,
   parseMcq,
+  parseBackTextSections,
   shortLine,
 } from './features/lite/utils'
 import {
   getSubjectColor as readSubjectColor,
+  getSubjectTheme as readSubjectTheme,
   loadSubjectColors,
   saveSubjectColors,
   setSubjectColorValue,
@@ -125,6 +127,9 @@ function uniqueKeys(values) {
 
 function getSubjectColor(subjectKey) {
   return readSubjectColor(subjectColors.value, subjectKey)
+}
+function getSubjectTheme(subjectKey) {
+  return readSubjectTheme(subjectColors.value, subjectKey)
 }
 function setSubjectColor(subjectKey, color) {
   subjectColors.value = setSubjectColorValue(subjectColors.value, subjectKey, color)
@@ -779,6 +784,7 @@ const activeCardBankCards = computed(() => {
 const activeCardBankCard = computed(() => activeCardBankCards.value[cardBankIndex.value] || null)
 const activeCardBankMcq = computed(() => parseMcq(activeCardBankCard.value || {}))
 const isCardBankMcq = computed(() => activeCardBankMcq.value.options.length > 0)
+const activeCardBankSections = computed(() => parseBackTextSections(activeCardBankCard.value || {}))
 
 function bankPrev() {
   if (cardBankIndex.value <= 0) return
@@ -1027,6 +1033,7 @@ onMounted(loadContext)
         :limits="state.limits"
         :subject-search="subjectSearch"
         :get-subject-color="getSubjectColor"
+        :get-subject-theme="getSubjectTheme"
         @manage-subjects="openSubjectModal"
         @open-subject="openSubject"
         @set-subject-color="setSubjectColorFromSidebar"
@@ -1132,6 +1139,7 @@ onMounted(loadContext)
           <div class="preview-header-row" style="margin-top: 10px;">
             <span class="muted">{{ selectedSubjectMeta() }}</span>
             <div class="toolbar">
+              <span class="box-chip" :class="`box-${activeCardBankCard.box_number || 1}`">Box {{ activeCardBankCard.box_number || 1 }}</span>
               <button class="mini-btn" :disabled="cardBankIndex <= 0" @click="bankPrev">‹</button>
               <span class="mini-chip">{{ `${cardBankIndex + 1} / ${activeCardBankCards.length}` }}</span>
               <button class="mini-btn" :disabled="cardBankIndex >= activeCardBankCards.length - 1" @click="bankNext">›</button>
@@ -1140,9 +1148,6 @@ onMounted(loadContext)
 
           <div class="preview-stage" v-if="activeCardBankCard">
             <div class="preview-counter">{{ cardBankIndex + 1 }} / {{ activeCardBankCards.length }}</div>
-            <div class="box-pill" :class="`box-${activeCardBankCard.box_number || 1}`">
-              Box {{ activeCardBankCard.box_number || 1 }}
-            </div>
 
             <div class="preview-body">
               <div class="preview-question">{{ activeCardBankCard.front_text }}</div>
@@ -1178,7 +1183,7 @@ onMounted(loadContext)
                   <button class="mini-btn ghost" @click="bankToggleFlip">{{ cardBankFlipped ? 'Hide' : 'Reveal' }}</button>
                 </div>
                 <div v-if="cardBankFlipped" class="preview-answer-box">
-                  {{ activeCardBankCard.back_text }}
+                  {{ activeCardBankSections.answer || shortLine(activeCardBankSections.detailed, 520) || activeCardBankCard.back_text }}
                 </div>
               </div>
             </div>
@@ -1213,7 +1218,15 @@ onMounted(loadContext)
           <strong class="muted">Question</strong>
           <p>{{ activeCardBankCard.front_text }}</p>
           <strong class="muted">Answer</strong>
-          <p style="white-space: pre-wrap;">{{ activeCardBankCard.back_text }}</p>
+          <p style="white-space: pre-wrap;">{{ activeCardBankSections.answer || '—' }}</p>
+          <strong class="muted">Detailed breakdown</strong>
+          <p style="white-space: pre-wrap;">{{ activeCardBankSections.detailed || 'Open FL4SH for the deeper breakdown, examples, and links to related topics.' }}</p>
+          <div v-if="activeCardBankSections.relatedTopics && activeCardBankSections.relatedTopics.length" style="margin-top: 10px;">
+            <strong class="muted">Related topics</strong>
+            <div class="toolbar" style="margin-top: 6px; flex-wrap: wrap; justify-content:flex-start;">
+              <span v-for="t in activeCardBankSections.relatedTopics.slice(0, 8)" :key="`rel-${t}`" class="mini-chip">{{ t }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>

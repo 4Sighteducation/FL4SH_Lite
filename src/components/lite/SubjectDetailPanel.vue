@@ -32,6 +32,8 @@ const emit = defineEmits([
 ])
 
 const topicSearch = ref('')
+const priorityFilter = ref(0) // 0 | 1 | 2 | 3
+const showPriorityHelp = ref(false)
 const allTopicRows = computed(() => {
   const out = []
   const walk = (nodes, depth = 0) => {
@@ -54,9 +56,43 @@ const allTopicRows = computed(() => {
 })
 const filteredTopicRows = computed(() => {
   const query = topicSearch.value.trim().toLowerCase()
-  if (!query) return props.topicRows
-  return allTopicRows.value.filter((row) => String(row.label || '').toLowerCase().includes(query))
+  const p = Number(priorityFilter.value || 0)
+  const hasAny = Object.keys(props.topicPriorities || {}).length > 0
+  const base = (!query && !p) ? props.topicRows : allTopicRows.value
+
+  // If filtering by priority, include matching nodes + their ancestors to keep hierarchy readable.
+  if (p && hasAny) {
+    const includeIds = new Set()
+    const walk = (nodes, ancestorIds = []) => {
+      ;(Array.isArray(nodes) ? nodes : []).forEach((node) => {
+        const id = String(node?.id || node?.topic_code || node?.topic_name || '')
+        const code = String(node?.topic_code || node?.topic_name || '')
+        const children = Array.isArray(node?.children) ? node.children : []
+        const rowLike = { id, topic_code: code }
+        const selfMatch = effectivePriority(rowLike) === p
+        let childMatch = false
+        if (children.length) {
+          childMatch = walk(children, [...ancestorIds, id])
+        }
+        if (selfMatch || childMatch) {
+          includeIds.add(id)
+          ancestorIds.forEach((a) => includeIds.add(a))
+          return true
+        }
+        return false
+      })
+      return (Array.isArray(nodes) ? nodes : []).some((node) => includeIds.has(String(node?.id || node?.topic_code || node?.topic_name || '')))
+    }
+    walk(props.topicTree || [], [])
+    return base
+      .filter((row) => includeIds.has(String(row.id || '')))
+      .filter((row) => !query || String(row.label || '').toLowerCase().includes(query))
+  }
+
+  return base.filter((row) => !query || String(row.label || '').toLowerCase().includes(query))
 })
+
+const showPriorityFilter = computed(() => Object.keys(props.topicPriorities || {}).length > 0)
 
 function rawPriority(topicCode) {
   const key = String(topicCode || '').trim()
@@ -135,12 +171,55 @@ function cyclePriority(row) {
   emit('set-topic-priority', { topic_code: code, priority: next })
 }
 
+function priorityHelpText() {
+  return `Priority helps you focus revision.\n\nP1 (High): still unsure — revise first.\nP2 (Medium): getting there — practise.\nP3 (Low): confident — occasional check.\n\nTip: prioritise parent topics or subtopics; parents show an average of prioritised children.`
+}
+
+function priorityHintTitle(p) {
+  if (p === 1) return 'High priority (revise first)'
+  if (p === 2) return 'Medium priority (still learning)'
+  if (p === 3) return 'Low priority (got this covered)'
+  return 'Click to set priority'
+}
+
 const totalCards = computed(() => Number(props.cards?.length || 0))
 function progressPercent(count) {
   const total = totalCards.value
   if (!total) return 0
   const c = Number(count || 0)
   return Math.max(0, Math.min(100, Math.round((c / total) * 100)))
+}
+
+function hexToRgb(hex) {
+  const raw = String(hex || '').trim().replace('#', '')
+  if (!raw) return null
+  const value = raw.length === 3
+    ? raw.split('').map((c) => c + c).join('')
+    : raw
+  if (value.length !== 6) return null
+  const r = parseInt(value.slice(0, 2), 16)
+  const g = parseInt(value.slice(2, 4), 16)
+  const b = parseInt(value.slice(4, 6), 16)
+  if (![r, g, b].every(Number.isFinite)) return null
+  return { r, g, b }
+}
+
+function mixRgb(a, b, t) {
+  const k = Math.max(0, Math.min(1, Number(t || 0)))
+  return {
+    r: Math.round(a.r + (b.r - a.r) * k),
+    g: Math.round(a.g + (b.g - a.g) * k),
+    b: Math.round(a.b + (b.b - a.b) * k),
+  }
+}
+
+function topicAccent(depth) {
+  const baseHex = props.getSubjectColor(props.selectedSubjectKey)
+  const base = hexToRgb(baseHex) || hexToRgb('#7c4dff')
+  const white = { r: 255, g: 255, b: 255 }
+  const t = depth <= 0 ? 0 : depth === 1 ? 0.18 : depth === 2 ? 0.30 : depth === 3 ? 0.40 : 0.48
+  const mixed = mixRgb(base, white, t)
+  return `rgba(${mixed.r}, ${mixed.g}, ${mixed.b}, 0.85)`
 }
 </script>
 
@@ -197,9 +276,28 @@ function progressPercent(count) {
 
     <div class="section-shell">
       <div class="sd-topic-head">
-        <span class="sd-topic-title">Topics</span>
+        <div>
+          <span class="sd-topic-title">Topics</span>
+          <div class="sd-priority-legend">
+            <span class="muted">Priority:</span>
+            <span class="prio-pill p1">P1</span><span class="muted">High</span>
+            <span class="prio-pill p2">P2</span><span class="muted">Medium</span>
+            <span class="prio-pill p3">P3</span><span class="muted">Low</span>
+            <span class="muted">· click a pill to cycle</span>
+            <span class="prio-help">
+              <button class="mini-btn ghost" @click="showPriorityHelp = !showPriorityHelp">?</button>
+              <span class="prio-help-pop" v-if="showPriorityHelp">{{ priorityHelpText() }}</span>
+            </span>
+          </div>
+        </div>
         <div class="sd-topic-search">
           <input v-model="topicSearch" class="sd-topic-search-input" type="search" placeholder="Search topics..." />
+          <select v-if="showPriorityFilter" v-model="priorityFilter" class="sd-priority-filter" title="Filter by priority">
+            <option :value="0">All priorities</option>
+            <option :value="1">P1 only</option>
+            <option :value="2">P2 only</option>
+            <option :value="3">P3 only</option>
+          </select>
           <button v-if="topicSearch" class="mini-btn ghost" @click="topicSearch = ''">Clear</button>
           <button class="mini-btn" v-if="props.hasActiveFilters" @click="emit('set-active-topic-filter', '')">Reset</button>
         </div>
@@ -234,6 +332,7 @@ function progressPercent(count) {
             'leaf-topic': !row.hasChildren,
           }"
           :data-depth="row.depth"
+          :style="{ '--topic-accent': topicAccent(row.depth) }"
           @click="emit('toggle-topic-row', row)"
         >
           <span
@@ -249,7 +348,7 @@ function progressPercent(count) {
           <div class="sd-topic-meta">
             <button
               class="prio-pill-btn"
-              :title="priorityText(effectivePriority(row))"
+              :title="priorityHintTitle(effectivePriority(row))"
               @click.stop="cyclePriority(row)"
             >
               <span :class="priorityClass(effectivePriority(row))">{{ priorityLabel(effectivePriority(row)) }}</span>

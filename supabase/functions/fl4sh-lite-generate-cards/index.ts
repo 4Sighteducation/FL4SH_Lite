@@ -105,12 +105,27 @@ function mcqBackText(card: any): string {
   if (!options.length) return "";
   const lines = options.map((opt) => `${opt.key}) ${opt.text}`);
   if (correctKey) lines.push(`Correct answer: ${correctKey}`);
-  if (typeof card?.detailedAnswer === "string" && card.detailedAnswer.trim()) {
+  // Always include a "Detailed answer" section for parsing + UX consistency.
+  const detailed = (typeof card?.detailedAnswer === "string" && card.detailedAnswer.trim())
+    ? card.detailedAnswer.trim()
+    : (typeof card?.answer === "string" && card.answer.trim())
+    ? card.answer.trim()
+    : "";
+  lines.push("");
+  lines.push("Detailed answer:");
+  lines.push(detailed || "Open FL4SH for a deeper explanation, examples, and links to related topics.");
+
+  // Optional related topics / links if the generator provides them.
+  const related = Array.isArray(card?.relatedTopics) ? card.relatedTopics
+    : Array.isArray(card?.related_topics) ? card.related_topics
+    : [];
+  if (related.length) {
     lines.push("");
-    lines.push(card.detailedAnswer.trim());
-  } else if (typeof card?.answer === "string" && card.answer.trim()) {
-    lines.push("");
-    lines.push(card.answer.trim());
+    lines.push("Related topics:");
+    related.slice(0, 6).forEach((t: any) => {
+      const label = String(t?.label || t?.topic || t || "").trim();
+      if (label) lines.push(`- ${label}`);
+    });
   }
   return lines.join("\n");
 }
@@ -120,13 +135,27 @@ function toBackText(card: any, questionType: string): string {
     const mcq = mcqBackText(card);
     if (mcq) return mcq;
   }
-  if (typeof card?.detailedAnswer === "string" && card.detailedAnswer.trim()) return card.detailedAnswer.trim();
-  if (typeof card?.answer === "string" && card.answer.trim()) return card.answer.trim();
+  const answer = (typeof card?.answer === "string" && card.answer.trim())
+    ? card.answer.trim()
+    : (typeof card?.correctAnswer === "string" && card.correctAnswer.trim())
+    ? card.correctAnswer.trim()
+    : "";
+  const detailed = (typeof card?.detailedAnswer === "string" && card.detailedAnswer.trim())
+    ? card.detailedAnswer.trim()
+    : "";
   if (Array.isArray(card?.keyPoints) && card.keyPoints.length) {
-    return card.keyPoints.map((x: any) => `- ${String(x)}`).join("\n");
+    const points = card.keyPoints.map((x: any) => `- ${String(x)}`).join("\n");
+    return [
+      answer ? `Answer:\n${answer}` : "",
+      "Detailed answer:",
+      detailed || points || "Open FL4SH for a deeper explanation, examples, and links to related topics.",
+    ].filter(Boolean).join("\n\n");
   }
-  if (typeof card?.correctAnswer === "string" && card.correctAnswer.trim()) return card.correctAnswer.trim();
-  return "Review this topic in FL4SH for the full explanation.";
+  return [
+    answer ? `Answer:\n${answer}` : "",
+    "Detailed answer:",
+    detailed || "Open FL4SH for a deeper explanation, examples, and links to related topics.",
+  ].filter(Boolean).join("\n\n");
 }
 
 function clampInt(n: any, min: number, max: number, fallback: number): number {
@@ -159,7 +188,14 @@ serve(async (req: Request) => {
     const questionType = String(payload.questionType || payload.question_type || "short_answer").trim();
     const requested = clampInt(payload.numCards ?? payload.num_cards, 1, 5, 3);
     const previewOnly = Boolean(payload.preview_only);
-    const contentGuidance = String(payload.contentGuidance || payload.content_guidance || "").trim() || undefined;
+    const rawGuidance = String(payload.contentGuidance || payload.content_guidance || "").trim();
+    const enforcedGuidance = [
+      rawGuidance,
+      "For EVERY card, include a detailedAnswer field: a clear, structured breakdown with extra depth.",
+      "Where helpful, include a small list of relatedTopics (short phrases) that connect to nearby specification areas.",
+      "Avoid unnecessary fluff; be concise but exam-aligned."
+    ].filter(Boolean).join("\n");
+    const contentGuidance = enforcedGuidance.trim() ? enforcedGuidance.trim() : undefined;
 
     if (!subjectKey || !subject || !topic || !examBoard) {
       return json(400, { ok: false, error: "Missing subject_key, subject, topic, or examBoard" });
