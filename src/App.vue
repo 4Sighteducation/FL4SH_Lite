@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watchEffect } from 'vue'
+import { computed, onMounted, reactive, ref, watch, watchEffect } from 'vue'
 import { LINKS, callFn } from './lib/api'
 import CardDetailModal from './components/lite/CardDetailModal.vue'
 import LiteHeader from './components/lite/LiteHeader.vue'
@@ -62,6 +62,7 @@ const currentUpsellPlacement = ref('general')
 const modalLevel = ref('')
 const modalSearch = ref('')
 const modalCourseType = ref('all')
+const modalExamBoard = ref('All exam boards')
 const subjectColors = ref({})
 const topicTree = ref([])
 const expandedTopics = ref({})
@@ -348,12 +349,14 @@ function openSubjectModal() {
   modalSearch.value = ''
   modalLevel.value = examLevelChoices[0]?.label || ''
   modalCourseType.value = 'all'
+  modalExamBoard.value = 'All exam boards'
   state.showSubjectModal = true
   trackEventSafe('subject_modal_open', 'subject_modal', { preselected: subjectDraft.value.length })
 }
 
 function setModalCourseType(courseTypeId) {
   modalCourseType.value = String(courseTypeId || 'all')
+  modalExamBoard.value = 'All exam boards'
   const choice = courseTypeChoices.find((c) => c.id === modalCourseType.value) || courseTypeChoices[0]
   const allowed = Array.isArray(choice?.levels) ? choice.levels : []
 
@@ -366,6 +369,30 @@ function setModalCourseType(courseTypeId) {
     modalLevel.value = allowed[0] || 'All levels'
   }
 }
+
+const modalExamBoardChoices = computed(() => {
+  const base = Array.isArray(filteredModalSubjects.value) ? filteredModalSubjects.value : []
+  const set = new Set(
+    base
+      .map((s) => String(s?.exam_board || '').trim())
+      .filter(Boolean)
+  )
+  return ['All exam boards', ...[...set].sort((a, b) => a.localeCompare(b))]
+})
+const filteredModalSubjectsWithBoard = computed(() => {
+  const board = String(modalExamBoard.value || '').trim()
+  const base = Array.isArray(filteredModalSubjects.value) ? filteredModalSubjects.value : []
+  if (!board || board === 'All exam boards') return base
+  return base.filter((s) => String(s?.exam_board || '').trim() === board)
+})
+
+watch(
+  modalExamBoardChoices,
+  (choices) => {
+    if (!choices.includes(modalExamBoard.value)) modalExamBoard.value = 'All exam boards'
+  },
+  { immediate: true }
+)
 function closeSubjectModal() {
   state.showSubjectModal = false
   trackEventSafe('subject_modal_close', 'subject_modal', { selected_draft: subjectDraft.value.length })
@@ -1553,15 +1580,18 @@ onMounted(loadContext)
       :modal-course-type="modalCourseType"
       :exam-level-choices="examLevelChoices"
       :modal-level="modalLevel"
+      :exam-board-choices="modalExamBoardChoices"
+      :modal-exam-board="modalExamBoard"
       :modal-search="modalSearch"
-      :filtered-modal-subjects="filteredModalSubjects"
-      :result-count="filteredModalSubjects.length"
+      :filtered-modal-subjects="filteredModalSubjectsWithBoard"
+      :result-count="filteredModalSubjectsWithBoard.length"
       :subject-draft="subjectDraft"
       :max-subjects="state.limits.max_subjects"
       :busy="state.busy"
       @close="closeSubjectModal"
       @update:modal-course-type="setModalCourseType"
       @update:modal-level="modalLevel = $event"
+      @update:modal-exam-board="modalExamBoard = $event"
       @update:modal-search="modalSearch = $event"
       @toggle-subject="selectSubjectFromModal"
       @save-subjects="saveSubjects"

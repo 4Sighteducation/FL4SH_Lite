@@ -2159,6 +2159,30 @@ textarea, input, select {
 .modal-search-row input {
   margin-bottom: 0;
 }
+.modal-board-select{
+  min-width: 180px;
+  height: 38px;
+  border-radius: 12px;
+}
+.subject-item-body{ width: 100%; }
+.subject-name-row{
+  display:flex;
+  align-items:flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.subject-selected-pill{
+  font-family: "Space Mono", monospace;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.6px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  border: 1px solid rgba(0, 245, 255, 0.45);
+  background: rgba(0, 245, 255, 0.12);
+  color: rgba(224, 255, 255, 0.95);
+  flex-shrink: 0;
+}
 .create-flow-modal {
   width: min(780px, 92vw);
   max-height: min(80vh, 760px);

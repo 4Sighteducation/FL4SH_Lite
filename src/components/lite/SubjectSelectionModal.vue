@@ -7,6 +7,8 @@ const props = defineProps({
   modalCourseType: { type: String, required: true },
   examLevelChoices: { type: Array, required: true },
   modalLevel: { type: String, required: true },
+  examBoardChoices: { type: Array, required: true },
+  modalExamBoard: { type: String, required: true },
   modalSearch: { type: String, required: true },
   filteredModalSubjects: { type: Array, required: true },
   resultCount: { type: Number, required: true },
@@ -19,6 +21,7 @@ const emit = defineEmits([
   'close',
   'update:modalCourseType',
   'update:modalLevel',
+  'update:modalExamBoard',
   'update:modalSearch',
   'toggle-subject',
   'save-subjects',
@@ -49,6 +52,12 @@ function onSearchInput(event) {
 function clearSearch() {
   emit('update:modalSearch', '')
 }
+function onBoardChange(event) {
+  emit('update:modalExamBoard', event?.target?.value || 'All exam boards')
+}
+function clearBoard() {
+  emit('update:modalExamBoard', 'All exam boards')
+}
 function openPicker() {
   pickerOpen.value = true
 }
@@ -74,6 +83,11 @@ const wizardHint = computed(() => {
   if (!selected) return `Pick up to ${props.maxSubjects} subjects to unlock the app.`
   if (selected < props.maxSubjects) return `Select ${props.maxSubjects - selected} more or press Save.`
   return `You’ve selected the maximum for Lite. Press Save to continue.`
+})
+const boardSuffix = computed(() => {
+  const board = String(props.modalExamBoard || '').trim()
+  if (!board || board === 'All exam boards') return ''
+  return ` · ${board}`
 })
 const sortedModalSubjects = computed(() => {
   return [...props.filteredModalSubjects].sort((a, b) => {
@@ -127,10 +141,14 @@ const sortedModalSubjects = computed(() => {
       <div class="wizard-block">
         <div class="wizard-title">Step 3: Find subjects</div>
         <div class="modal-search-row">
-          <input :value="props.modalSearch" @input="onSearchInput" placeholder="Search subjects (optional)..." />
+          <select class="modal-board-select" :value="props.modalExamBoard" @change="onBoardChange">
+            <option v-for="b in props.examBoardChoices" :key="`b-${b}`" :value="b">{{ b }}</option>
+          </select>
+          <input style="flex: 1;" :value="props.modalSearch" @input="onSearchInput" placeholder="Search subjects (optional)..." />
+          <button v-if="props.modalExamBoard && props.modalExamBoard !== 'All exam boards'" class="mini-btn" @click="clearBoard">Clear board</button>
           <button v-if="props.modalSearch" class="mini-btn" @click="clearSearch">Clear</button>
         </div>
-        <small class="muted">Showing {{ props.resultCount }} subject{{ props.resultCount === 1 ? '' : 's' }} · {{ props.modalLevel }}</small>
+        <small class="muted">Showing {{ props.resultCount }} subject{{ props.resultCount === 1 ? '' : 's' }} · {{ props.modalLevel }}{{ boardSuffix }}</small>
         <div class="wizard-actions">
           <button class="btn neon-btn" type="button" @click="openPicker">Browse subjects</button>
           <small class="muted">Selected: {{ props.subjectDraft.length }} / {{ props.maxSubjects }}</small>
@@ -149,10 +167,14 @@ const sortedModalSubjects = computed(() => {
         </div>
         <p class="muted">Pick up to {{ props.maxSubjects }} subjects. Selected subjects appear first.</p>
         <div class="modal-search-row">
-          <input :value="props.modalSearch" @input="onSearchInput" placeholder="Search subjects..." />
+          <select class="modal-board-select" :value="props.modalExamBoard" @change="onBoardChange">
+            <option v-for="b in props.examBoardChoices" :key="`b2-${b}`" :value="b">{{ b }}</option>
+          </select>
+          <input style="flex: 1;" :value="props.modalSearch" @input="onSearchInput" placeholder="Search subjects..." />
+          <button v-if="props.modalExamBoard && props.modalExamBoard !== 'All exam boards'" class="mini-btn" @click="clearBoard">Clear board</button>
           <button v-if="props.modalSearch" class="mini-btn" @click="clearSearch">Clear</button>
         </div>
-        <small class="muted">Showing {{ props.resultCount }} subject{{ props.resultCount === 1 ? '' : 's' }} · {{ props.modalLevel }}</small>
+        <small class="muted">Showing {{ props.resultCount }} subject{{ props.resultCount === 1 ? '' : 's' }} · {{ props.modalLevel }}{{ boardSuffix }}</small>
 
         <div class="subject-pick subject-picker-grid">
           <button
@@ -163,10 +185,12 @@ const sortedModalSubjects = computed(() => {
             :disabled="isSubjectLocked(subject.subject_key)"
             @click="emit('toggle-subject', subject.subject_key)"
           >
-            <div>
-              <div class="subject-name">{{ subject.subject_name }}</div>
+            <div class="subject-item-body">
+              <div class="subject-name-row">
+                <div class="subject-name">{{ subject.subject_name }}</div>
+                <span class="subject-selected-pill" v-if="props.subjectDraft.includes(subject.subject_key)">Selected</span>
+              </div>
               <small class="subject-meta">{{ subject.exam_board }} · {{ subject.qualification_type }}</small>
-              <small class="subject-selected-tag" v-if="props.subjectDraft.includes(subject.subject_key)">Selected</small>
             </div>
           </button>
           <div v-if="!props.filteredModalSubjects.length" class="muted">No subjects match this search and level.</div>
