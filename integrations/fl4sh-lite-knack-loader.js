@@ -153,8 +153,21 @@
         // If measurement fails (returns 0), fall back to a safe default that matches
         // the current VESPA stacked header height.
         const topOffset = measured >= 60 ? measured : 170;
-        wrapper.style.paddingTop = topOffset ? `${topOffset}px` : '0px';
-        wrapper.style.minHeight = topOffset ? `calc(100vh - ${topOffset}px)` : '72vh';
+
+        // Avoid double-padding: if the Knack content container is already below the header,
+        // only add enough padding to clear the overlay.
+        const containerTop = (() => {
+          try {
+            const r = target.getBoundingClientRect();
+            return Number.isFinite(r?.top) ? r.top : 0;
+          } catch {
+            return 0;
+          }
+        })();
+        const needed = Math.max(0, Math.round(topOffset - Math.max(0, containerTop)));
+
+        wrapper.style.paddingTop = needed ? `${needed}px` : '0px';
+        wrapper.style.minHeight = `calc(100vh - ${needed}px)`;
         try {
           document.documentElement.style.scrollPaddingTop = topOffset ? `${topOffset}px` : '0px';
           // Expose as CSS variable so fixed-position modals can also offset correctly.
