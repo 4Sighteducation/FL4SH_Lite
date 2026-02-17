@@ -89,11 +89,13 @@ export async function callFn(name, body = {}) {
     })
   } catch (networkErr) {
     const message = networkErr instanceof Error ? networkErr.message : 'Network request failed'
+    console.error('[callFn] network error', { name, message })
     throw createApiError(`Network error calling ${name}: ${message}`, null, 'NETWORK_ERROR')
   }
   const data = await res.json().catch(() => ({}))
   if (!res.ok || data?.ok === false) {
     const code = String(data?.error || '').trim() || null
+    console.error('[callFn] request failed', { name, status: res.status, code, data })
     throw createApiError(data?.error || `Request failed (${res.status})`, res.status, code)
   }
   return data

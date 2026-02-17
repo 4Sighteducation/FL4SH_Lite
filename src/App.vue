@@ -91,6 +91,7 @@ const cardBankFlipped = ref(false)
 const cardBankSelectedOption = ref('')
 const cardBankSelectedCorrect = ref(null)
 const cardBankMetaOpen = ref(false)
+const deletingCardId = ref('')
 const boxPreviewOpen = ref(false)
 const boxPreviewBox = ref(1)
 const boxPreviewIndex = ref(0)
@@ -1089,12 +1090,14 @@ async function requestDeleteCard(cardId) {
 
 async function deleteCard(cardId) {
   state.busy = true
+  deletingCardId.value = String(cardId || '')
   try {
     await deleteLiteCard(callFn, cardId)
     await loadCards()
   } catch (e) {
     handleLiteError(e, 'Could not delete card.', 'card_delete')
   } finally {
+    deletingCardId.value = ''
     state.busy = false
   }
 }
@@ -1246,6 +1249,7 @@ onMounted(loadContext)
         <div v-else-if="!activeCardBankCards.length" class="muted" style="padding: 8px 2px;">
           No cards in this subject yet. Create some cards first, then come back here to revise.
         </div>
+        <div v-if="state.error" class="error" style="margin-top: 8px;">{{ state.error }}</div>
 
         <template v-else>
           <div class="preview-header-row" style="margin-top: 10px;">
@@ -1303,8 +1307,9 @@ onMounted(loadContext)
             <div class="preview-footer">
               <div class="preview-footer-left">
                 <button class="info-icon-btn" title="More info" @click="bankOpenMeta"><span>i</span></button>
-                <button class="trash-icon-btn" title="Delete card" @click="bankDeleteActiveCard">
-                  <span>🗑</span>
+                <button class="trash-icon-btn" title="Delete card" :disabled="state.busy" @click="bankDeleteActiveCard">
+                  <span v-if="deletingCardId && activeCardBankCard?.id && String(deletingCardId) === String(activeCardBankCard.id)" class="mini-spinner"></span>
+                  <span v-else>🗑</span>
                 </button>
               </div>
               <div class="toolbar">

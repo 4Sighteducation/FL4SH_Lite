@@ -1330,6 +1330,20 @@ textarea, input, select {
   border-color: rgba(255,51,102,0.62);
   box-shadow: 0 0 12px rgba(255,51,102,0.14);
 }
+.trash-icon-btn:disabled{
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+.mini-spinner{
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid rgba(255,231,239,0.35);
+  border-top-color: rgba(255,231,239,0.95);
+  animation: spin 0.75s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .preview-footer-btn{
   border: 1px solid transparent;
   background: transparent;
