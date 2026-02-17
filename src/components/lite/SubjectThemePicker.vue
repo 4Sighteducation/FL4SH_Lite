@@ -23,7 +23,7 @@ function pickGradient(row) {
 </script>
 
 <template>
-  <div class="modal" v-if="props.visible">
+  <div class="modal" v-if="props.visible" @click.self="emit('close')">
     <div class="modal-card neon theme-picker-card">
       <div class="panel-head">
         <div>

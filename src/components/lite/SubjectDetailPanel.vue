@@ -215,13 +215,14 @@ function mixRgb(a, b, t) {
   }
 }
 
-function topicAccent(depth) {
+function topicAccent(depth, alpha = 0.85) {
   const baseHex = props.getSubjectColor(props.selectedSubjectKey)
   const base = hexToRgb(baseHex) || hexToRgb('#7c4dff')
   const white = { r: 255, g: 255, b: 255 }
   const t = depth <= 0 ? 0 : depth === 1 ? 0.18 : depth === 2 ? 0.30 : depth === 3 ? 0.40 : 0.48
   const mixed = mixRgb(base, white, t)
-  return `rgba(${mixed.r}, ${mixed.g}, ${mixed.b}, 0.85)`
+  const a = Math.max(0, Math.min(1, Number(alpha || 0)))
+  return `rgba(${mixed.r}, ${mixed.g}, ${mixed.b}, ${a})`
 }
 </script>
 
@@ -355,7 +356,7 @@ function topicAccent(depth) {
             'leaf-topic': !row.hasChildren,
           }"
           :data-depth="row.depth"
-          :style="{ '--topic-accent': topicAccent(row.depth) }"
+          :style="{ '--topic-accent': topicAccent(row.depth, 0.85), '--topic-accent-soft': topicAccent(row.depth, 0.12) }"
           @click="emit('toggle-topic-row', row)"
         >
           <span

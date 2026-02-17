@@ -186,6 +186,14 @@ h2, h3, h4 { margin: 0 0 8px; }
   position: relative;
   overflow: hidden;
 }
+.subject-card::after{
+  content:'';
+  position:absolute;
+  inset: 0;
+  background: radial-gradient(520px circle at 18% 22%, var(--subject-accent, var(--primary)) 0%, transparent 62%);
+  opacity: 0.14;
+  pointer-events:none;
+}
 .subject-card::before{
   content:'';
   position:absolute;
@@ -604,6 +612,9 @@ h2, h3, h4 { margin: 0 0 8px; }
   text-align: left;
   position: relative;
   overflow: hidden;
+}
+.sd-topic-row{
+  background-image: linear-gradient(90deg, var(--topic-accent-soft, transparent), transparent 55%);
 }
 .sd-topic-row::before{
   content:'';
