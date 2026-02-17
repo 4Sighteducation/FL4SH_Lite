@@ -32,13 +32,22 @@ function pickTheme(theme) {
   emit('set-subject-color', { subjectKey, color: theme })
   closeThemePicker()
 }
+
+function openSubjectSafe(subjectKey) {
+  closeThemePicker()
+  emit('open-subject', subjectKey)
+}
+function manageSubjectsSafe() {
+  closeThemePicker()
+  emit('manage-subjects')
+}
 </script>
 
 <template>
   <aside class="panel">
     <div class="panel-head">
       <h3>Your subjects</h3>
-      <button class="mini-btn active" @click="emit('manage-subjects')">Manage</button>
+      <button class="mini-btn active" @click="manageSubjectsSafe">Manage</button>
     </div>
     <p class="muted">Choose up to {{ props.limits.max_subjects }} subjects in Lite.</p>
     <input
@@ -53,7 +62,7 @@ function pickTheme(theme) {
         :key="s.subject_key"
         class="subject-card"
         :class="{ active: props.selectedSubjectKey === s.subject_key }"
-        @click="emit('open-subject', s.subject_key)"
+        @click="openSubjectSafe(s.subject_key)"
         :style="{
           borderColor: props.getSubjectColor(s.subject_key),
           '--subject-accent': props.getSubjectTheme(s.subject_key)?.accent || props.getSubjectColor(s.subject_key),

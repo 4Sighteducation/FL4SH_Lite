@@ -60,7 +60,10 @@ export function parseMcq(card) {
   lines.forEach((line) => {
     const opt = line.match(/^([A-D])[)\].:\-]\s+(.+)$/i)
     if (opt) {
-      options.push({ key: String(opt[1] || '').toUpperCase(), text: String(opt[2] || '').trim() })
+      const rawText = String(opt[2] || '').trim()
+      // Sometimes generators repeat the label in the option text (e.g. "A) a) ...").
+      const cleaned = rawText.replace(/^([A-D])[)\].:\-]\s*/i, '').trim()
+      options.push({ key: String(opt[1] || '').toUpperCase(), text: cleaned })
       return
     }
     const correctMatch = line.match(/^correct\s*answer\s*[:\-]?\s*([A-D])$/i)

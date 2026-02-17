@@ -192,6 +192,15 @@ function progressPercent(count) {
   return Math.max(0, Math.min(100, Math.round((c / total) * 100)))
 }
 
+function boxIcon(boxNum) {
+  const b = Number(boxNum || 1)
+  if (b === 1) return '◆'
+  if (b === 2) return '✦'
+  if (b === 3) return '⚡'
+  if (b === 4) return '✶'
+  return '★'
+}
+
 function hexToRgb(hex) {
   const raw = String(hex || '').trim().replace('#', '')
   if (!raw) return null
@@ -287,10 +296,11 @@ function topicAccent(depth, alpha = 0.85) {
           v-for="b in props.boxStats"
           :key="`sd-box-${b.box}`"
           class="leitner-box"
+          :class="`box-${b.box}`"
           @click="emit('open-box-preview', b.box)"
         >
           <div class="box-label">
-            <strong>Box {{ b.box }}</strong>
+            <strong><span class="box-icon">{{ boxIcon(b.box) }}</span>Box {{ b.box }}</strong>
             <span>{{ b.title }}</span>
           </div>
           <div class="box-count">{{ b.count }} card{{ b.count === 1 ? '' : 's' }}</div>

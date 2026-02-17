@@ -1127,7 +1127,6 @@ onMounted(loadContext)
       <StudyPanel
         :visible="view === 'study'"
         :selected-subject="selectedSubject"
-        :all-cards="state.cards"
         :box-stats="boxStats"
         :pulse-box="pulseBox"
         :moving-card-text="movingCardText"
